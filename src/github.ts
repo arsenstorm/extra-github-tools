@@ -1,11 +1,17 @@
 const GITHUB_API_URL = "https://api.github.com";
 const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_USER_AGENT = "extra-github-tools";
-const DEFAULT_CONTRIBUTOR_STATS_ATTEMPTS = 5;
-const DEFAULT_CONTRIBUTOR_STATS_DELAY_MS = 1000;
-const DEFAULT_TRANSFER_SETTINGS_ATTEMPTS = 5;
-const DEFAULT_TRANSFER_SETTINGS_DELAY_MS = 1000;
+const DEFAULT_CONTRIBUTOR_STATS_ATTEMPTS = 8;
+const DEFAULT_CONTRIBUTOR_STATS_DELAY_MS = 2000;
+const MAX_CONTRIBUTOR_STATS_RETRY_DELAY_MS = 5000;
+const DEFAULT_TRANSFER_SETTINGS_ATTEMPTS = 10;
+const DEFAULT_TRANSFER_SETTINGS_DELAY_MS = 2000;
+const GITHUB_LIST_PAGE_SIZE = 100;
 const MAX_TRANSFER_CONCURRENCY = 3;
+const CONTRIBUTOR_STATS_PENDING_MESSAGE =
+	"GitHub is still calculating contributor statistics. Please try again in a moment.";
+const REPOSITORY_OPERATION_IN_PROGRESS_MESSAGE =
+	"previous repository operation is still in progress";
 
 export const TRANSFER_REPOSITORY_ARCHIVE_STATES = [
 	"current",
@@ -146,6 +152,20 @@ export interface AnalyzeGitHubRepositoryOptions {
 	sleep?: (durationMs: number) => Promise<void>;
 }
 
+export class GitHubContributorStatsPendingError extends Error {
+	constructor(owner: string, repositoryName: string) {
+		super(
+			`${CONTRIBUTOR_STATS_PENDING_MESSAGE} GitHub may need more time for ${owner}/${repositoryName}.`
+		);
+		this.name = "GitHubContributorStatsPendingError";
+	}
+}
+
+export const isGitHubContributorStatsPendingError = (
+	error: unknown
+): error is GitHubContributorStatsPendingError =>
+	error instanceof GitHubContributorStatsPendingError;
+
 export interface TransferGitHubRepositoriesOptions {
 	archiveState?: TransferRepositoryArchiveState;
 	maxSettingsUpdateAttempts?: number;
@@ -226,6 +246,83 @@ const fetchGitHubJson = async <ResponseData>(
 	return (await response.json()) as ResponseData;
 };
 
+const getRetryAfterDelayMs = (
+	response: Response,
+	defaultDelayMs: number
+): number => {
+	const retryAfter = response.headers.get("Retry-After");
+
+	if (!retryAfter) {
+		return defaultDelayMs;
+	}
+
+	const retryAfterSeconds = Number(retryAfter);
+
+	if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+		return Math.min(
+			retryAfterSeconds * 1000,
+			MAX_CONTRIBUTOR_STATS_RETRY_DELAY_MS
+		);
+	}
+
+	const retryAfterDate = Date.parse(retryAfter);
+
+	if (!Number.isNaN(retryAfterDate)) {
+		return Math.min(
+			Math.max(retryAfterDate - Date.now(), 0),
+			MAX_CONTRIBUTOR_STATS_RETRY_DELAY_MS
+		);
+	}
+
+	return defaultDelayMs;
+};
+
+const createGitHubPaginatedPathname = (
+	pathname: string,
+	page: number
+): string => {
+	const paginationParams = new URLSearchParams({
+		page: String(page),
+		per_page: String(GITHUB_LIST_PAGE_SIZE),
+	});
+	const separator = pathname.includes("?") ? "&" : "?";
+
+	return `${pathname}${separator}${paginationParams.toString()}`;
+};
+
+const fetchGitHubPaginatedJson = async <ResponseData>(
+	pathname: string,
+	accessToken: string,
+	fetchImplementation: typeof fetch,
+	firstResponse: Response,
+	fallbackMessage: string
+): Promise<ResponseData[]> => {
+	const results: ResponseData[] = [];
+	let page = 1;
+	let response = firstResponse;
+
+	while (true) {
+		if (!response.ok) {
+			throw await createGitHubError(response, fallbackMessage);
+		}
+
+		const pageResults = (await response.json()) as ResponseData[];
+
+		results.push(...pageResults);
+
+		if (pageResults.length < GITHUB_LIST_PAGE_SIZE) {
+			return results;
+		}
+
+		page += 1;
+		response = await fetchGitHubResponse(
+			createGitHubPaginatedPathname(pathname, page),
+			accessToken,
+			fetchImplementation
+		);
+	}
+};
+
 export async function getGitHubViewer(
 	accessToken: string,
 	fetchImplementation: typeof fetch = fetch
@@ -300,36 +397,60 @@ export async function listGitHubRepositories(
 	account: string,
 	fetchImplementation: typeof fetch = fetch
 ): Promise<GitHubRepository[]> {
-	const [organizationResponse, userResponse] = await Promise.all([
-		fetchGitHubResponse(
-			`/orgs/${account}/repos`,
-			accessToken,
-			fetchImplementation
-		),
-		fetchGitHubResponse(
-			`/users/${account}/repos`,
-			accessToken,
-			fetchImplementation
-		),
-	]);
+	const organizationRepositoriesPathname = `/orgs/${encodeURIComponent(account)}/repos`;
+	const organizationResponse = await fetchGitHubResponse(
+		createGitHubPaginatedPathname(organizationRepositoriesPathname, 1),
+		accessToken,
+		fetchImplementation
+	);
 
-	const organizationRepositories = organizationResponse.ok
-		? ((await organizationResponse.json()) as GitHubRepositoryResponse[])
-		: null;
-
-	if (organizationRepositories && organizationRepositories.length > 0) {
-		return mapGitHubRepositories(organizationRepositories);
+	if (organizationResponse.ok) {
+		return mapGitHubRepositories(
+			await fetchGitHubPaginatedJson<GitHubRepositoryResponse>(
+				organizationRepositoriesPathname,
+				accessToken,
+				fetchImplementation,
+				organizationResponse,
+				`Failed to load repositories for ${account}.`
+			)
+		);
 	}
 
-	if (userResponse.ok) {
-		const userRepositories =
-			(await userResponse.json()) as GitHubRepositoryResponse[];
+	if (organizationResponse.status !== 404) {
+		throw await createGitHubError(
+			organizationResponse,
+			`Failed to load repositories for ${account}.`
+		);
+	}
 
-		return mapGitHubRepositories(userRepositories);
+	const authenticatedUserRepositoriesPathname = "/user/repos?affiliation=owner";
+	const userResponse = await fetchGitHubResponse(
+		createGitHubPaginatedPathname(authenticatedUserRepositoriesPathname, 1),
+		accessToken,
+		fetchImplementation
+	);
+
+	if (userResponse.ok) {
+		const repositories =
+			await fetchGitHubPaginatedJson<GitHubRepositoryResponse>(
+				authenticatedUserRepositoriesPathname,
+				accessToken,
+				fetchImplementation,
+				userResponse,
+				`Failed to load repositories for ${account}.`
+			);
+
+		return mapGitHubRepositories(
+			repositories.filter((repository) =>
+				repository.full_name
+					.toLowerCase()
+					.startsWith(`${account.toLowerCase()}/`)
+			)
+		);
 	}
 
 	throw await createGitHubError(
-		organizationResponse.ok ? userResponse : organizationResponse,
+		userResponse,
 		`Failed to load repositories for ${account}.`
 	);
 }
@@ -482,6 +603,22 @@ const hasRepositorySettingsRequestBody = (
 	body: GitHubRepositorySettingsRequestBody
 ): boolean => body.private !== undefined || body.archived !== undefined;
 
+const isRetryableRepositorySettingsResponse = (
+	response: Response,
+	errorMessage: string
+): boolean => {
+	if (response.status === 404 || response.status === 409) {
+		return true;
+	}
+
+	return (
+		response.status === 422 &&
+		errorMessage
+			.toLowerCase()
+			.includes(REPOSITORY_OPERATION_IN_PROGRESS_MESSAGE)
+	);
+};
+
 const updateTransferredRepositorySettings = async (
 	accessToken: string,
 	owner: string,
@@ -531,6 +668,10 @@ const updateTransferredRepositorySettings = async (
 				response,
 				`Transferred ${repository}, but failed to update repository settings.`
 			);
+			const shouldRetry = isRetryableRepositorySettingsResponse(
+				response,
+				error.message
+			);
 
 			lastResult = {
 				error: error.message,
@@ -539,7 +680,7 @@ const updateTransferredRepositorySettings = async (
 				statusText: response.statusText,
 			};
 
-			if (response.status !== 404 || attempt === options.maxAttempts) {
+			if (!shouldRetry || attempt === options.maxAttempts) {
 				return lastResult;
 			}
 		} catch (error) {
@@ -591,20 +732,24 @@ const getContributorStatsWithRetry = async (
 		attempt += 1
 	) {
 		const response = await fetchGitHubResponse(
-			`/repos/${owner}/${repositoryName}/stats/contributors`,
+			`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}/stats/contributors`,
 			accessToken,
 			options.fetchImplementation
 		);
 
 		if (response.status === 202) {
 			if (attempt === options.maxContributorStatsAttempts) {
-				throw new Error(
-					"GitHub is still calculating contributor statistics. Please try again in a moment."
-				);
+				throw new GitHubContributorStatsPendingError(owner, repositoryName);
 			}
 
-			await options.sleep(options.contributorStatsDelayMs);
+			await options.sleep(
+				getRetryAfterDelayMs(response, options.contributorStatsDelayMs)
+			);
 			continue;
+		}
+
+		if (response.status === 204) {
+			return [];
 		}
 
 		if (!response.ok) {
@@ -631,9 +776,7 @@ const getContributorStatsWithRetry = async (
 		await options.sleep(options.contributorStatsDelayMs);
 	}
 
-	throw new Error(
-		"GitHub is still calculating contributor statistics. Please try again in a moment."
-	);
+	throw new GitHubContributorStatsPendingError(owner, repositoryName);
 };
 
 export async function analyzeGitHubRepository(
@@ -651,36 +794,19 @@ export async function analyzeGitHubRepository(
 		sleep: options.sleep ?? sleep,
 	};
 
-	const repository = await fetchGitHubJson<GitHubRepositoryInfoResponse>(
-		`/repos/${owner}/${repositoryName}`,
+	const contributors = await getContributorStatsWithRetry(
 		accessToken,
-		resolvedOptions.fetchImplementation,
-		undefined,
-		`Failed to load ${owner}/${repositoryName}.`
+		owner,
+		repositoryName,
+		resolvedOptions
 	);
-
-	const [contributors, tree] = await Promise.all([
-		getContributorStatsWithRetry(
-			accessToken,
-			owner,
-			repositoryName,
-			resolvedOptions
-		),
-		fetchGitHubJson<GitHubTreeResponse>(
-			`/repos/${owner}/${repositoryName}/git/trees/${repository.default_branch}?recursive=1`,
-			accessToken,
-			resolvedOptions.fetchImplementation,
-			undefined,
-			`Failed to load the file tree for ${owner}/${repositoryName}.`
-		),
-	]);
 
 	const totalCommits = contributors.reduce(
 		(total, contributor) => total + (contributor.total || 0),
 		0
 	);
 
-	const contributorRows = await Promise.all(
+	const contributorRowsPromise = Promise.all(
 		contributors
 			.filter(
 				(
@@ -727,6 +853,24 @@ export async function analyzeGitHubRepository(
 				} satisfies ContributorStats;
 			})
 	);
+
+	const repository = await fetchGitHubJson<GitHubRepositoryInfoResponse>(
+		`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}`,
+		accessToken,
+		resolvedOptions.fetchImplementation,
+		undefined,
+		`Failed to load ${owner}/${repositoryName}.`
+	);
+	const [contributorRows, tree] = await Promise.all([
+		contributorRowsPromise,
+		fetchGitHubJson<GitHubTreeResponse>(
+			`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}/git/trees/${encodeURIComponent(repository.default_branch)}?recursive=1`,
+			accessToken,
+			resolvedOptions.fetchImplementation,
+			undefined,
+			`Failed to load the file tree for ${owner}/${repositoryName}.`
+		),
+	]);
 
 	const totalAdditions = contributorRows.reduce(
 		(total, contributor) => total + contributor.additions,

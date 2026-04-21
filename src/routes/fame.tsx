@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAppSession } from "@/app-session";
@@ -28,6 +28,8 @@ interface FameSearch {
 	org?: string;
 	repo?: string;
 }
+
+const FAME_STATS_PENDING_REFRESH_MS = 5000;
 
 const normalizeSearchValue = (value: unknown): string | undefined =>
 	typeof value === "string" && value.trim().length > 0
@@ -66,6 +68,7 @@ export const Route = createFileRoute("/fame")({
 function FameRoute() {
 	const appSession = useAppSession();
 	const pageData = Route.useLoaderData();
+	const router = useRouter();
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
 
@@ -74,6 +77,24 @@ function FameRoute() {
 			toast.error(pageData.error);
 		}
 	}, [pageData.error]);
+
+	useEffect(() => {
+		if (!(pageData.statsPending && search.org && search.repo)) {
+			return;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			router.invalidate().catch((error: unknown) => {
+				toast.error(
+					error instanceof Error
+						? error.message
+						: "Failed to refresh repository statistics."
+				);
+			});
+		}, FAME_STATS_PENDING_REFRESH_MS);
+
+		return () => window.clearTimeout(timeoutId);
+	}, [pageData.statsPending, router, search.org, search.repo]);
 
 	return (
 		<FamePageContent
@@ -176,6 +197,7 @@ export function FamePageContent({
 						org={org}
 						repo={repo}
 						stats={pageData.stats}
+						statsPending={pageData.statsPending}
 					/>
 				</FameGate>
 			) : null}
@@ -321,12 +343,28 @@ function RepoAnalysisPanel({
 	org,
 	repo,
 	stats,
+	statsPending,
 }: Readonly<{
 	error: string | null;
 	org: string;
 	repo: string;
 	stats: RepoStats | null;
+	statsPending: boolean;
 }>) {
+	if (statsPending) {
+		return (
+			<div className="flex flex-col items-center justify-center space-y-4 py-12">
+				<div className="h-12 w-12 animate-spin rounded-full border-zinc-900 border-t-2 border-b-2 dark:border-zinc-100" />
+				<Text className="font-medium text-lg">
+					GitHub is calculating contributor statistics
+				</Text>
+				<Text className="max-w-md text-center text-sm text-zinc-500">
+					{org}/{repo} is not ready yet. This page will retry automatically.
+				</Text>
+			</div>
+		);
+	}
+
 	if (error) {
 		return (
 			<div className="flex flex-col items-center justify-center space-y-4 py-12">

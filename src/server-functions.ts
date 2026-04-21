@@ -3,6 +3,7 @@ import {
 	analyzeGitHubRepository,
 	type GitHubAccount,
 	type GitHubRepository,
+	isGitHubContributorStatsPendingError,
 	listGitHubAccounts,
 	listGitHubRepositories,
 	type RepoStats,
@@ -16,6 +17,7 @@ import {
 
 const GITHUB_ACCESS_REQUIRED_MESSAGE =
 	"We couldn’t find your GitHub access or your session has expired. Please sign in again.";
+const FAME_CONTRIBUTOR_STATS_ATTEMPTS = 1;
 
 const normalizeOptionalString = (
 	value: string | null | undefined
@@ -98,6 +100,7 @@ export interface FamePageData {
 	organizations: GitHubAccount[] | null;
 	repositories: GitHubRepository[] | null;
 	stats: RepoStats | null;
+	statsPending: boolean;
 }
 
 export interface ContactFormInput {
@@ -231,6 +234,7 @@ export async function resolveFamePageData(
 			organizations: null,
 			repositories: null,
 			stats: null,
+			statsPending: false,
 		};
 	}
 
@@ -241,6 +245,7 @@ export async function resolveFamePageData(
 				organizations: await listGitHubAccounts(githubAuth.accessToken),
 				repositories: null,
 				stats: null,
+				statsPending: false,
 			};
 		}
 
@@ -253,6 +258,7 @@ export async function resolveFamePageData(
 					search.org
 				),
 				stats: null,
+				statsPending: false,
 			};
 		}
 
@@ -263,15 +269,30 @@ export async function resolveFamePageData(
 			stats: await analyzeGitHubRepository(
 				githubAuth.accessToken,
 				search.org,
-				search.repo
+				search.repo,
+				{
+					maxContributorStatsAttempts: FAME_CONTRIBUTOR_STATS_ATTEMPTS,
+				}
 			),
+			statsPending: false,
 		};
 	} catch (error) {
+		if (isGitHubContributorStatsPendingError(error)) {
+			return {
+				error: null,
+				organizations: null,
+				repositories: null,
+				stats: null,
+				statsPending: true,
+			};
+		}
+
 		return {
 			error: toMessage(error, "Failed to load repository analysis."),
 			organizations: null,
 			repositories: null,
 			stats: null,
+			statsPending: false,
 		};
 	}
 }

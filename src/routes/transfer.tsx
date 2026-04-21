@@ -10,6 +10,8 @@ import {
 	ArrowRight,
 	CheckCircle2,
 	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
 	CircleAlert,
 	RefreshCcw,
 } from "lucide-react";
@@ -64,6 +66,7 @@ interface TransferSearch {
 }
 
 type RepositoryStatus = "failed" | "idle" | "pending" | "transferred";
+type RepositorySort = "default" | "pushed-asc" | "pushed-desc";
 
 interface RepositoryTransferOptions {
 	archiveState: TransferRepositoryArchiveState;
@@ -73,6 +76,7 @@ interface RepositoryTransferOptions {
 }
 
 const CONFIRMATION_REQUIRED_REPOSITORY_COUNT = 5;
+const DEFAULT_REPOSITORIES_PER_PAGE = 25;
 
 const REPOSITORY_VISIBILITY_OPTIONS = [
 	{
@@ -110,6 +114,27 @@ const REPOSITORY_ARCHIVE_STATE_OPTIONS = [
 	value: TransferRepositoryArchiveState;
 }>;
 
+const REPOSITORIES_PER_PAGE_OPTIONS = [10, 25, 50, 100] as const;
+type RepositoriesPerPage = (typeof REPOSITORIES_PER_PAGE_OPTIONS)[number];
+
+const REPOSITORY_SORT_OPTIONS = [
+	{
+		label: "Default order",
+		value: "default",
+	},
+	{
+		label: "Last pushed: newest",
+		value: "pushed-desc",
+	},
+	{
+		label: "Last pushed: oldest",
+		value: "pushed-asc",
+	},
+] as const satisfies ReadonlyArray<{
+	label: string;
+	value: RepositorySort;
+}>;
+
 const normalizeSearchValue = (value: unknown): string | undefined =>
 	typeof value === "string" && value.trim().length > 0
 		? value.trim()
@@ -138,6 +163,44 @@ const formatRepositoryPushedAt = (pushedAt: string | null): string => {
 	}).format(new Date(pushedAt));
 };
 
+const getRepositoryPushedAtTimestamp = (pushedAt: string | null): number => {
+	if (!pushedAt) {
+		return 0;
+	}
+
+	const timestamp = Date.parse(pushedAt);
+
+	return Number.isNaN(timestamp) ? 0 : timestamp;
+};
+
+const compareRepositoryNames = (
+	firstRepository: GitHubRepository,
+	secondRepository: GitHubRepository
+): number => firstRepository.name.localeCompare(secondRepository.name);
+
+const sortRepositories = (
+	repositories: GitHubRepository[],
+	repositorySort: RepositorySort
+): GitHubRepository[] => {
+	if (repositorySort === "default") {
+		return repositories;
+	}
+
+	const direction = repositorySort === "pushed-desc" ? -1 : 1;
+
+	return [...repositories].sort((firstRepository, secondRepository) => {
+		const pushedAtDifference =
+			(getRepositoryPushedAtTimestamp(firstRepository.pushedAt) -
+				getRepositoryPushedAtTimestamp(secondRepository.pushedAt)) *
+			direction;
+
+		return (
+			pushedAtDifference ||
+			compareRepositoryNames(firstRepository, secondRepository)
+		);
+	});
+};
+
 const getSelectedRepositoryNames = (
 	repositoryNames: Iterable<string>,
 	repositories: GitHubRepository[]
@@ -148,6 +211,14 @@ const getSelectedRepositoryNames = (
 		.filter((repository) => selectedRepositoryNames.has(repository.name))
 		.map((repository) => repository.name);
 };
+
+const getRepositoryPageCount = (
+	repositoryCount: number,
+	repositoriesPerPage: number
+): number => Math.max(1, Math.ceil(repositoryCount / repositoriesPerPage));
+
+const clampRepositoryPage = (page: number, pageCount: number): number =>
+	Math.min(Math.max(page, 1), pageCount);
 
 const getRepositoryStatus = (
 	repositoryName: string,
@@ -460,7 +531,12 @@ export function TransferPageContent({
 	const [rangeAnchorRepository, setRangeAnchorRepository] = useState<
 		string | null
 	>(null);
+	const [repositoriesPerPage, setRepositoriesPerPage] =
+		useState<RepositoriesPerPage>(DEFAULT_REPOSITORIES_PER_PAGE);
+	const [repositoryPage, setRepositoryPage] = useState(1);
 	const [repositorySearch, setRepositorySearch] = useState("");
+	const [repositorySort, setRepositorySort] =
+		useState<RepositorySort>("default");
 	const [selectedRepositories, setSelectedRepositories] = useState<string[]>(
 		[]
 	);
@@ -484,20 +560,44 @@ export function TransferPageContent({
 	const filteredRepositories = useMemo(() => {
 		const normalizedSearch = repositorySearch.trim().toLowerCase();
 
-		if (!normalizedSearch) {
-			return repositories;
-		}
+		const matchingRepositories = normalizedSearch
+			? repositories.filter((repository) =>
+					[repository.name, repository.fullName]
+						.join(" ")
+						.toLowerCase()
+						.includes(normalizedSearch)
+				)
+			: repositories;
 
-		return repositories.filter((repository) =>
-			[repository.name, repository.fullName]
-				.join(" ")
-				.toLowerCase()
-				.includes(normalizedSearch)
-		);
-	}, [repositories, repositorySearch]);
+		return sortRepositories(matchingRepositories, repositorySort);
+	}, [repositories, repositorySearch, repositorySort]);
+	const repositoryPageCount = getRepositoryPageCount(
+		filteredRepositories.length,
+		repositoriesPerPage
+	);
+	const currentRepositoryPage = clampRepositoryPage(
+		repositoryPage,
+		repositoryPageCount
+	);
+	const repositoryPageStartIndex =
+		filteredRepositories.length > 0
+			? (currentRepositoryPage - 1) * repositoriesPerPage
+			: 0;
+	const repositoryPageEndIndex = Math.min(
+		repositoryPageStartIndex + repositoriesPerPage,
+		filteredRepositories.length
+	);
+	const paginatedRepositories = useMemo(
+		() =>
+			filteredRepositories.slice(
+				repositoryPageStartIndex,
+				repositoryPageEndIndex
+			),
+		[filteredRepositories, repositoryPageEndIndex, repositoryPageStartIndex]
+	);
 	const visibleRepositoryNames = useMemo(
-		() => filteredRepositories.map((repository) => repository.name),
-		[filteredRepositories]
+		() => paginatedRepositories.map((repository) => repository.name),
+		[paginatedRepositories]
 	);
 	const transferOptions = useMemo(
 		() => ({
@@ -520,11 +620,44 @@ export function TransferPageContent({
 		setNameSuffix("");
 		setPendingRepositories([]);
 		setRangeAnchorRepository(null);
+		setRepositoryPage(1);
 		setRepositorySearch("");
+		setRepositorySort("default");
 		setSelectedRepositories([]);
 		setTransferResults(null);
 		setVisibility("current");
 	}, [selectionResetKey]);
+
+	useEffect(() => {
+		setRepositoryPage((previousPage) =>
+			clampRepositoryPage(previousPage, repositoryPageCount)
+		);
+	}, [repositoryPageCount]);
+
+	const updateRepositorySearch = (value: string): void => {
+		setRangeAnchorRepository(null);
+		setRepositoryPage(1);
+		setRepositorySearch(value);
+	};
+
+	const updateRepositoryPage = (page: number): void => {
+		setRangeAnchorRepository(null);
+		setRepositoryPage(clampRepositoryPage(page, repositoryPageCount));
+	};
+
+	const updateRepositoriesPerPage = (
+		nextRepositoriesPerPage: RepositoriesPerPage
+	): void => {
+		setRangeAnchorRepository(null);
+		setRepositoriesPerPage(nextRepositoriesPerPage);
+		setRepositoryPage(1);
+	};
+
+	const updateRepositorySort = (nextRepositorySort: RepositorySort): void => {
+		setRangeAnchorRepository(null);
+		setRepositoryPage(1);
+		setRepositorySort(nextRepositorySort);
+	};
 
 	const updateSelectedRepositories = (
 		repositoryName: string,
@@ -641,6 +774,7 @@ export function TransferPageContent({
 						<RepositoryTransferWorkbench
 							archiveState={archiveState}
 							confirmationValue={confirmationValue}
+							currentRepositoryPage={currentRepositoryPage}
 							filteredRepositories={filteredRepositories}
 							from={from}
 							isReviewing={isReviewing}
@@ -655,7 +789,10 @@ export function TransferPageContent({
 							onChangeConfirmationValue={setConfirmationValue}
 							onChangeNamePrefix={setNamePrefix}
 							onChangeNameSuffix={setNameSuffix}
-							onChangeSearch={setRepositorySearch}
+							onChangeRepositoriesPerPage={updateRepositoriesPerPage}
+							onChangeRepositoryPage={updateRepositoryPage}
+							onChangeSearch={updateRepositorySearch}
+							onChangeSort={updateRepositorySort}
 							onChangeVisibility={setVisibility}
 							onClearResults={() => setTransferResults(null)}
 							onConfirmTransfer={handleTransfer}
@@ -665,9 +802,15 @@ export function TransferPageContent({
 								setIsReviewing(true);
 							}}
 							onToggleRepository={updateSelectedRepositories}
+							paginatedRepositories={paginatedRepositories}
 							pendingRepositories={pendingRepositories}
 							repositories={repositories}
+							repositoriesPerPage={repositoriesPerPage}
+							repositoryPageCount={repositoryPageCount}
+							repositoryPageEndIndex={repositoryPageEndIndex}
+							repositoryPageStartIndex={repositoryPageStartIndex}
 							repositorySearch={repositorySearch}
+							repositorySort={repositorySort}
 							selectedRepositories={selectedRepositories}
 							to={to}
 							transferResults={transferResults}
@@ -840,6 +983,7 @@ function TransferStartState({
 function RepositoryTransferWorkbench({
 	archiveState,
 	confirmationValue,
+	currentRepositoryPage,
 	filteredRepositories,
 	from,
 	isReviewing,
@@ -851,16 +995,25 @@ function RepositoryTransferWorkbench({
 	onChangeConfirmationValue,
 	onChangeNamePrefix,
 	onChangeNameSuffix,
+	onChangeRepositoriesPerPage,
+	onChangeRepositoryPage,
 	onChangeSearch,
+	onChangeSort,
 	onChangeVisibility,
 	onClearResults,
 	onConfirmTransfer,
 	onRetryFailedTransfers,
 	onReviewTransfer,
 	onToggleRepository,
+	paginatedRepositories,
 	pendingRepositories,
 	repositories,
+	repositoriesPerPage,
+	repositoryPageCount,
+	repositoryPageEndIndex,
+	repositoryPageStartIndex,
 	repositorySearch,
+	repositorySort,
 	selectedRepositories,
 	to,
 	transferResults,
@@ -868,6 +1021,7 @@ function RepositoryTransferWorkbench({
 }: Readonly<{
 	archiveState: TransferRepositoryArchiveState;
 	confirmationValue: string;
+	currentRepositoryPage: number;
 	filteredRepositories: GitHubRepository[];
 	from: string;
 	isReviewing: boolean;
@@ -879,7 +1033,10 @@ function RepositoryTransferWorkbench({
 	onChangeConfirmationValue: (value: string) => void;
 	onChangeNamePrefix: (value: string) => void;
 	onChangeNameSuffix: (value: string) => void;
+	onChangeRepositoriesPerPage: (value: RepositoriesPerPage) => void;
+	onChangeRepositoryPage: (page: number) => void;
 	onChangeSearch: (value: string) => void;
+	onChangeSort: (value: RepositorySort) => void;
 	onChangeVisibility: (value: TransferRepositoryVisibility) => void;
 	onClearResults: () => void;
 	onConfirmTransfer: () => void;
@@ -889,9 +1046,15 @@ function RepositoryTransferWorkbench({
 		repositoryName: string,
 		shouldSelectRange?: boolean
 	) => void;
+	paginatedRepositories: GitHubRepository[];
 	pendingRepositories: string[];
 	repositories: GitHubRepository[];
+	repositoriesPerPage: RepositoriesPerPage;
+	repositoryPageCount: number;
+	repositoryPageEndIndex: number;
+	repositoryPageStartIndex: number;
 	repositorySearch: string;
+	repositorySort: RepositorySort;
 	selectedRepositories: string[];
 	to: string;
 	transferResults: TransferRepositoryResult[] | null;
@@ -953,7 +1116,7 @@ function RepositoryTransferWorkbench({
 					Select repositories from <Strong>{from}</Strong> to transfer to{" "}
 					<Strong>{to}</Strong>.
 				</Text>
-				<div className="flex flex-col gap-2 sm:min-w-72">
+				<div className="grid gap-3 sm:min-w-[32rem] sm:grid-cols-[minmax(0,1fr)_12rem]">
 					<InputGroup>
 						<MagnifyingGlassIcon />
 						<Input
@@ -964,16 +1127,36 @@ function RepositoryTransferWorkbench({
 							value={repositorySearch}
 						/>
 					</InputGroup>
+					<RepositoryTransferSelect<RepositorySort>
+						ariaLabel="Sort repositories"
+						className="mt-0"
+						disabled={isTransferring}
+						onChange={onChangeSort}
+						options={REPOSITORY_SORT_OPTIONS}
+						value={repositorySort}
+					/>
 				</div>
 			</div>
-			<RepositoriesTable
-				filteredRepositories={filteredRepositories}
-				isTransferring={isTransferring}
-				onToggle={onToggleRepository}
-				pendingRepositories={pendingRepositorySet}
-				resultsByRepository={resultsByRepository}
-				selectedRepositories={selectedRepositorySet}
-			/>
+			<div className="mb-32 space-y-4">
+				<RepositoriesTable
+					filteredRepositories={paginatedRepositories}
+					isTransferring={isTransferring}
+					onToggle={onToggleRepository}
+					pendingRepositories={pendingRepositorySet}
+					resultsByRepository={resultsByRepository}
+					selectedRepositories={selectedRepositorySet}
+				/>
+				<RepositoryPagination
+					currentPage={currentRepositoryPage}
+					onChangePage={onChangeRepositoryPage}
+					onChangePageSize={onChangeRepositoriesPerPage}
+					pageCount={repositoryPageCount}
+					pageSize={repositoriesPerPage}
+					totalRepositoryCount={filteredRepositories.length}
+					visibleEndIndex={repositoryPageEndIndex}
+					visibleStartIndex={repositoryPageStartIndex}
+				/>
+			</div>
 			{transferResults ? (
 				<TransferResultsPanel
 					onClearResults={onClearResults}
@@ -1007,12 +1190,14 @@ function RepositoryTransferWorkbench({
 
 function RepositoryTransferSelect<T extends string>({
 	ariaLabel,
+	className = "mt-2",
 	disabled,
 	onChange,
 	options,
 	value,
 }: Readonly<{
 	ariaLabel: string;
+	className?: string;
 	disabled: boolean;
 	onChange: (value: T) => void;
 	options: ReadonlyArray<{
@@ -1023,7 +1208,7 @@ function RepositoryTransferSelect<T extends string>({
 }>) {
 	return (
 		<span
-			className="relative mt-2 block w-full before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow-sm has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none dark:before:hidden"
+			className={`relative block w-full before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow-sm has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none dark:before:hidden ${className}`}
 			data-slot="control"
 		>
 			<select
@@ -1200,6 +1385,79 @@ function RepositoryTransferSettingsPanel({
 	);
 }
 
+function RepositoryPagination({
+	currentPage,
+	onChangePage,
+	onChangePageSize,
+	pageCount,
+	pageSize,
+	totalRepositoryCount,
+	visibleEndIndex,
+	visibleStartIndex,
+}: Readonly<{
+	currentPage: number;
+	onChangePage: (page: number) => void;
+	onChangePageSize: (value: RepositoriesPerPage) => void;
+	pageCount: number;
+	pageSize: RepositoriesPerPage;
+	totalRepositoryCount: number;
+	visibleEndIndex: number;
+	visibleStartIndex: number;
+}>) {
+	if (totalRepositoryCount === 0) {
+		return null;
+	}
+
+	const visibleStart = visibleStartIndex + 1;
+
+	return (
+		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+			<Text>
+				Showing <Strong>{visibleStart}</Strong> to{" "}
+				<Strong>{visibleEndIndex}</Strong> of{" "}
+				<Strong>{totalRepositoryCount}</Strong> repositories.
+			</Text>
+			<div className="flex items-center gap-4">
+				<Button
+					disabled={currentPage <= 1}
+					onClick={() => onChangePage(currentPage - 1)}
+					outline
+				>
+					<ChevronLeft data-slot="icon" />
+					Previous
+				</Button>
+				<Text>
+					Page <Strong>{currentPage}</Strong> of <Strong>{pageCount}</Strong>
+				</Text>
+				<Button
+					disabled={currentPage >= pageCount}
+					onClick={() => onChangePage(currentPage + 1)}
+					outline
+				>
+					Next
+					<ChevronRight data-slot="icon" />
+				</Button>
+			</div>
+			<label className="flex items-center gap-2 text-sm/6 text-zinc-700 dark:text-zinc-300">
+				<span>Rows per page</span>
+				<select
+					className="dark:scheme-dark rounded-lg border border-zinc-950/10 bg-transparent py-1.5 pr-8 pl-2 text-zinc-950 focus:outline-2 focus:outline-blue-500 dark:border-white/10 dark:bg-white/5 dark:text-white"
+					onChange={(event) =>
+						onChangePageSize(Number(event.target.value) as RepositoriesPerPage)
+					}
+					value={pageSize}
+				>
+					{REPOSITORIES_PER_PAGE_OPTIONS.map((option) => (
+						<option key={option} value={option}>
+							{option}
+						</option>
+					))}
+				</select>
+			</label>
+		</div>
+	);
+}
+
 function RepositoriesTable({
 	filteredRepositories,
 	isTransferring,
@@ -1236,7 +1494,7 @@ function RepositoriesTable({
 	};
 
 	return (
-		<div className="mb-32">
+		<div>
 			<Table>
 				<TableHead>
 					<TableRow>
