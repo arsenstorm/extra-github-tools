@@ -1116,7 +1116,7 @@ function RepositoryTransferWorkbench({
 					Select repositories from <Strong>{from}</Strong> to transfer to{" "}
 					<Strong>{to}</Strong>.
 				</Text>
-				<div className="grid gap-3 sm:min-w-[32rem] sm:grid-cols-[minmax(0,1fr)_12rem]">
+				<div className="grid gap-3 sm:min-w-lg sm:grid-cols-[minmax(0,1fr)_12rem]">
 					<InputGroup>
 						<MagnifyingGlassIcon />
 						<Input
