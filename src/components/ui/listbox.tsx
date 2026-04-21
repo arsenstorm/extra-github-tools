@@ -8,10 +8,8 @@ import {
 	ListboxOptions as HeadlessListboxOptions,
 	type ListboxProps as HeadlessListboxProps,
 	ListboxSelectedOption as HeadlessListboxSelectedOption,
-	Transition as HeadlessTransition,
 } from "@headlessui/react";
 import clsx from "clsx";
-import type React from "react";
 import { Fragment } from "react";
 
 export function Listbox<T>({
@@ -27,9 +25,9 @@ export function Listbox<T>({
 	autoFocus?: boolean;
 	"aria-label"?: string;
 	children?: React.ReactNode;
-} & Omit<HeadlessListboxProps<typeof Fragment, T>, "multiple">) {
+} & Omit<HeadlessListboxProps<typeof Fragment, T>, "as" | "multiple">) {
 	return (
-		<HeadlessListbox {...props} multiple={false}>
+		<HeadlessListbox as={"div"} {...props} multiple={false}>
 			<HeadlessListboxButton
 				aria-label={ariaLabel}
 				autoFocus={autoFocus}
@@ -38,15 +36,15 @@ export function Listbox<T>({
 					// Basic layout
 					"group relative block w-full",
 					// Background color + shadow applied to inset pseudo element, so shadow blends with border in light mode
-					"before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow",
+					"before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow-sm",
 					// Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
 					"dark:before:hidden",
 					// Hide default focus styles
-					"focus:outline-none",
+					"focus:outline-hidden",
 					// Focus ring
-					"after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset after:data-focus:ring-2 after:data-focus:ring-blue-500",
+					"after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset data-focus:after:ring-2 data-focus:after:ring-blue-500",
 					// Disabled state
-					"data-disabled:opacity-50 before:data-disabled:bg-zinc-950/5 before:data-disabled:shadow-none",
+					"data-disabled:opacity-50 data-disabled:before:bg-zinc-950/5 data-disabled:before:shadow-none",
 				])}
 				data-slot="control"
 			>
@@ -66,9 +64,9 @@ export function Listbox<T>({
 						// Background color
 						"bg-transparent dark:bg-white/5",
 						// Invalid state
-						"group-data-invalid:group-data-hover:border-red-500 group-data-invalid:border-red-500 group-data-invalid:dark:border-red-600 group-data-invalid:data-hover:dark:border-red-600",
+						"group-data-hover:group-data-invalid:border-red-500 group-data-invalid:border-red-500 dark:group-data-invalid:border-red-600 dark:data-hover:group-data-invalid:border-red-600",
 						// Disabled state
-						"group-data-disabled:border-zinc-950/20 group-data-disabled:opacity-100 group-data-disabled:dark:border-white/15 group-data-disabled:dark:bg-white/2.5 dark:data-hover:group-data-disabled:border-white/15",
+						"group-data-disabled:border-zinc-950/20 group-data-disabled:opacity-100 dark:group-data-disabled:border-white/15 dark:group-data-disabled:bg-white/2.5 dark:group-data-disabled:data-hover:border-white/15",
 					])}
 					options={options}
 					placeholder={
@@ -101,31 +99,28 @@ export function Listbox<T>({
 					</svg>
 				</span>
 			</HeadlessListboxButton>
-			<HeadlessTransition
-				leave="transition-opacity duration-100 ease-in pointer-events-none"
-				leaveFrom="opacity-100"
-				leaveTo="opacity-0"
+			<HeadlessListboxOptions
+				anchor="selection start"
+				className={clsx(
+					// Anchor positioning
+					"[--anchor-offset:-1.625rem] [--anchor-padding:--spacing(4)] sm:[--anchor-offset:-1.375rem]",
+					// Base styles
+					"isolate w-max min-w-[calc(var(--button-width)+1.75rem)] select-none scroll-py-1 rounded-xl p-1",
+					// Invisible border that is only visible in `forced-colors` mode for accessibility purposes
+					"outline outline-transparent focus:outline-hidden",
+					// Handle scrolling when menu won't fit in viewport
+					"overflow-y-scroll overscroll-contain",
+					// Popover background
+					"bg-white/75 backdrop-blur-xl dark:bg-zinc-800/75",
+					// Shadows
+					"shadow-lg ring-1 ring-zinc-950/10 dark:ring-white/10 dark:ring-inset",
+					// Transitions
+					"transition-opacity duration-100 ease-in data-closed:data-leave:opacity-0 data-transition:pointer-events-none"
+				)}
+				transition
 			>
-				<HeadlessListboxOptions
-					anchor="selection start"
-					className={clsx(
-						// Anchor positioning
-						"[--anchor-offset:-1.625rem] [--anchor-padding:--spacing(4)] sm:[--anchor-offset:-1.375rem]",
-						// Base styles
-						"isolate w-max min-w-[calc(var(--button-width)+1.75rem)] select-none scroll-py-1 rounded-xl p-1",
-						// Invisible border that is only visible in `forced-colors` mode for accessibility purposes
-						"outline outline-1 outline-transparent focus:outline-none",
-						// Handle scrolling when menu won't fit in viewport
-						"overflow-y-scroll overscroll-contain",
-						// Popover background
-						"bg-white/75 backdrop-blur-xl dark:bg-zinc-800/75",
-						// Shadows
-						"shadow-lg ring-1 ring-zinc-950/10 dark:ring-white/10 dark:ring-inset"
-					)}
-				>
-					{options}
-				</HeadlessListboxOptions>
-			</HeadlessTransition>
+				{options}
+			</HeadlessListboxOptions>
 		</HeadlessListbox>
 	);
 }
@@ -136,15 +131,15 @@ export function ListboxOption<T>({
 	...props
 }: { className?: string; children?: React.ReactNode } & Omit<
 	HeadlessListboxOptionProps<"div", T>,
-	"className"
+	"as" | "className"
 >) {
 	const sharedClasses = clsx(
 		// Base
 		"flex min-w-0 items-center",
 		// Icons
 		"*:data-[slot=icon]:size-5 *:data-[slot=icon]:shrink-0 sm:*:data-[slot=icon]:size-4",
-		"*:data-[slot=icon]:text-zinc-500 *:data-[slot=icon]:group-data-focus/option:text-white *:data-[slot=icon]:dark:text-zinc-400",
-		"forced-colors:*:data-[slot=icon]:text-[CanvasText] forced-colors:*:data-[slot=icon]:group-data-focus/option:text-[Canvas]",
+		"*:data-[slot=icon]:text-zinc-500 group-data-focus/option:*:data-[slot=icon]:text-white dark:*:data-[slot=icon]:text-zinc-400",
+		"forced-colors:*:data-[slot=icon]:text-[CanvasText] forced-colors:group-data-focus/option:*:data-[slot=icon]:text-[Canvas]",
 		// Avatars
 		"*:data-[slot=avatar]:-mx-0.5 *:data-[slot=avatar]:size-6 sm:*:data-[slot=avatar]:size-5"
 	);
@@ -166,7 +161,7 @@ export function ListboxOption<T>({
 							// Typography
 							"text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white forced-colors:text-[CanvasText]",
 							// Focus
-							"outline-none data-focus:bg-blue-500 data-focus:text-white",
+							"outline-hidden data-focus:bg-blue-500 data-focus:text-white",
 							// Forced colors mode
 							"forced-color-adjust-none forced-colors:data-focus:bg-[Highlight] forced-colors:data-focus:text-[HighlightText]",
 							// Disabled
@@ -199,7 +194,7 @@ export function ListboxOption<T>({
 export function ListboxLabel({
 	className,
 	...props
-}: Readonly<React.ComponentPropsWithoutRef<"span">>) {
+}: React.ComponentPropsWithoutRef<"span">) {
 	return (
 		<span
 			{...props}
@@ -215,7 +210,7 @@ export function ListboxDescription({
 	className,
 	children,
 	...props
-}: Readonly<React.ComponentPropsWithoutRef<"span">>) {
+}: React.ComponentPropsWithoutRef<"span">) {
 	return (
 		<span
 			{...props}

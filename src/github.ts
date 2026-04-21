@@ -3,6 +3,20 @@ const GITHUB_API_VERSION = "2022-11-28";
 const GITHUB_USER_AGENT = "extra-github-tools";
 const DEFAULT_CONTRIBUTOR_STATS_ATTEMPTS = 5;
 const DEFAULT_CONTRIBUTOR_STATS_DELAY_MS = 1000;
+const DEFAULT_TRANSFER_SETTINGS_ATTEMPTS = 5;
+const DEFAULT_TRANSFER_SETTINGS_DELAY_MS = 1000;
+const MAX_TRANSFER_CONCURRENCY = 3;
+
+export const TRANSFER_REPOSITORY_ARCHIVE_STATES = [
+	"current",
+	"archived",
+	"unarchived",
+] as const;
+export const TRANSFER_REPOSITORY_VISIBILITIES = [
+	"current",
+	"private",
+	"public",
+] as const;
 
 interface GitHubViewerResponse {
 	avatar_url: string;
@@ -19,10 +33,14 @@ interface GitHubOrganizationResponse {
 }
 
 interface GitHubRepositoryResponse {
+	archived: boolean;
+	fork: boolean;
 	full_name: string;
 	html_url: string;
 	id: number;
 	name: string;
+	private: boolean;
+	pushed_at: string | null;
 }
 
 interface GitHubRepositoryInfoResponse {
@@ -69,15 +87,35 @@ export interface GitHubAccount {
 }
 
 export interface GitHubRepository {
+	archived: boolean;
+	fork: boolean;
 	fullName: string;
 	htmlUrl: string;
 	id: number;
 	name: string;
+	private: boolean;
+	pushedAt: string | null;
 }
 
 export interface TransferRepositoryResult {
+	error: string | null;
+	newName: string;
 	ok: boolean;
+	postTransferSettings?: TransferRepositorySettingsResult;
 	repository: string;
+	status: number;
+	statusText: string;
+}
+
+export type TransferRepositoryArchiveState =
+	(typeof TRANSFER_REPOSITORY_ARCHIVE_STATES)[number];
+
+export type TransferRepositoryVisibility =
+	(typeof TRANSFER_REPOSITORY_VISIBILITIES)[number];
+
+export interface TransferRepositorySettingsResult {
+	error: string | null;
+	ok: boolean;
 	status: number;
 	statusText: string;
 }
@@ -106,6 +144,21 @@ export interface AnalyzeGitHubRepositoryOptions {
 	fetchImplementation?: typeof fetch;
 	maxContributorStatsAttempts?: number;
 	sleep?: (durationMs: number) => Promise<void>;
+}
+
+export interface TransferGitHubRepositoriesOptions {
+	archiveState?: TransferRepositoryArchiveState;
+	maxSettingsUpdateAttempts?: number;
+	namePrefix?: string;
+	nameSuffix?: string;
+	settingsUpdateDelayMs?: number;
+	sleep?: (durationMs: number) => Promise<void>;
+	visibility?: TransferRepositoryVisibility;
+}
+
+interface GitHubRepositorySettingsRequestBody {
+	archived?: boolean;
+	private?: boolean;
 }
 
 const sleep = async (durationMs: number): Promise<void> =>
@@ -232,10 +285,14 @@ const mapGitHubRepositories = (
 	repositories: GitHubRepositoryResponse[]
 ): GitHubRepository[] =>
 	repositories.map((repository) => ({
+		archived: repository.archived,
 		fullName: repository.full_name,
+		fork: repository.fork,
 		htmlUrl: repository.html_url,
 		id: repository.id,
 		name: repository.name,
+		private: repository.private,
+		pushedAt: repository.pushed_at,
 	}));
 
 export async function listGitHubRepositories(
@@ -282,16 +339,36 @@ export async function transferGitHubRepositories(
 	from: string,
 	to: string,
 	repositories: string[],
-	fetchImplementation: typeof fetch = fetch
+	fetchImplementation: typeof fetch = fetch,
+	options: TransferGitHubRepositoriesOptions = {}
 ): Promise<TransferRepositoryResult[]> {
-	return await Promise.all(
-		repositories.map(async (repository) => {
+	const pendingRepositories = [...repositories];
+	const results: TransferRepositoryResult[] = [];
+	const namePrefix = options.namePrefix ?? "";
+	const nameSuffix = options.nameSuffix ?? "";
+	const maxSettingsUpdateAttempts =
+		options.maxSettingsUpdateAttempts ?? DEFAULT_TRANSFER_SETTINGS_ATTEMPTS;
+	const settingsUpdateDelayMs =
+		options.settingsUpdateDelayMs ?? DEFAULT_TRANSFER_SETTINGS_DELAY_MS;
+	const transferSleep = options.sleep ?? sleep;
+
+	const transferNextRepository = async (): Promise<void> => {
+		const repository = pendingRepositories.shift();
+
+		if (!repository) {
+			return;
+		}
+
+		const newName = `${namePrefix}${repository}${nameSuffix}`;
+
+		try {
 			const response = await fetchGitHubResponse(
-				`/repos/${from}/${repository}/transfer`,
+				`/repos/${encodeURIComponent(from)}/${encodeURIComponent(repository)}/transfer`,
 				accessToken,
 				fetchImplementation,
 				{
 					body: JSON.stringify({
+						...(newName === repository ? {} : { new_name: newName }),
 						new_owner: to,
 					}),
 					headers: {
@@ -302,21 +379,197 @@ export async function transferGitHubRepositories(
 			);
 
 			if (!response.ok) {
-				throw await createGitHubError(
+				const error = await createGitHubError(
 					response,
 					`Failed to transfer ${repository}.`
 				);
+
+				results.push({
+					error: error.message,
+					newName,
+					ok: false,
+					repository,
+					status: response.status,
+					statusText: response.statusText,
+				});
+
+				await transferNextRepository();
+				return;
 			}
 
-			return {
+			const postTransferSettings = await updateTransferredRepositorySettings(
+				accessToken,
+				to,
+				newName,
+				fetchImplementation,
+				{
+					archiveState: options.archiveState,
+					maxAttempts: maxSettingsUpdateAttempts,
+					settingsUpdateDelayMs,
+					sleep: transferSleep,
+					visibility: options.visibility,
+				}
+			);
+
+			results.push({
+				error: null,
+				newName,
 				ok: response.ok,
+				...(postTransferSettings ? { postTransferSettings } : {}),
 				repository,
 				status: response.status,
 				statusText: response.statusText,
-			};
-		})
+			});
+		} catch (error) {
+			results.push({
+				error: error instanceof Error ? error.message : "Transfer failed.",
+				newName,
+				ok: false,
+				repository,
+				status: 0,
+				statusText: "Request failed",
+			});
+		}
+
+		await transferNextRepository();
+	};
+
+	const workerCount = Math.min(MAX_TRANSFER_CONCURRENCY, repositories.length);
+	const workers = Array.from({ length: workerCount }, () =>
+		transferNextRepository()
+	);
+
+	await Promise.all(workers);
+
+	return repositories.map(
+		(repository) =>
+			results.find((result) => result.repository === repository) ?? {
+				error: "Transfer did not return a result.",
+				newName: `${namePrefix}${repository}${nameSuffix}`,
+				ok: false,
+				repository,
+				status: 0,
+				statusText: "Missing result",
+			}
 	);
 }
+
+const createRepositorySettingsRequestBody = ({
+	archiveState = "current",
+	visibility = "current",
+}: {
+	archiveState?: TransferRepositoryArchiveState;
+	visibility?: TransferRepositoryVisibility;
+}): GitHubRepositorySettingsRequestBody => {
+	const body: GitHubRepositorySettingsRequestBody = {};
+
+	if (visibility === "private") {
+		body.private = true;
+	} else if (visibility === "public") {
+		body.private = false;
+	}
+
+	if (archiveState === "archived") {
+		body.archived = true;
+	} else if (archiveState === "unarchived") {
+		body.archived = false;
+	}
+
+	return body;
+};
+
+const hasRepositorySettingsRequestBody = (
+	body: GitHubRepositorySettingsRequestBody
+): boolean => body.private !== undefined || body.archived !== undefined;
+
+const updateTransferredRepositorySettings = async (
+	accessToken: string,
+	owner: string,
+	repository: string,
+	fetchImplementation: typeof fetch,
+	options: {
+		archiveState?: TransferRepositoryArchiveState;
+		maxAttempts: number;
+		settingsUpdateDelayMs: number;
+		sleep: (durationMs: number) => Promise<void>;
+		visibility?: TransferRepositoryVisibility;
+	}
+): Promise<TransferRepositorySettingsResult | undefined> => {
+	const body = createRepositorySettingsRequestBody(options);
+
+	if (!hasRepositorySettingsRequestBody(body)) {
+		return;
+	}
+
+	let lastResult: TransferRepositorySettingsResult | null = null;
+
+	for (let attempt = 1; attempt <= options.maxAttempts; attempt += 1) {
+		try {
+			const response = await fetchGitHubResponse(
+				`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,
+				accessToken,
+				fetchImplementation,
+				{
+					body: JSON.stringify(body),
+					headers: {
+						"Content-Type": "application/json",
+					},
+					method: "PATCH",
+				}
+			);
+
+			if (response.ok) {
+				return {
+					error: null,
+					ok: true,
+					status: response.status,
+					statusText: response.statusText,
+				};
+			}
+
+			const error = await createGitHubError(
+				response,
+				`Transferred ${repository}, but failed to update repository settings.`
+			);
+
+			lastResult = {
+				error: error.message,
+				ok: false,
+				status: response.status,
+				statusText: response.statusText,
+			};
+
+			if (response.status !== 404 || attempt === options.maxAttempts) {
+				return lastResult;
+			}
+		} catch (error) {
+			lastResult = {
+				error:
+					error instanceof Error
+						? error.message
+						: "Repository settings update failed.",
+				ok: false,
+				status: 0,
+				statusText: "Request failed",
+			};
+
+			if (attempt === options.maxAttempts) {
+				return lastResult;
+			}
+		}
+
+		await options.sleep(options.settingsUpdateDelayMs);
+	}
+
+	return (
+		lastResult ?? {
+			error: "Repository settings update did not return a result.",
+			ok: false,
+			status: 0,
+			statusText: "Missing result",
+		}
+	);
+};
 
 const getContributorStatsWithRetry = async (
 	accessToken: string,

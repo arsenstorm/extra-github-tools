@@ -1,21 +1,19 @@
-"use client";
-
 import {
 	Input as HeadlessInput,
 	type InputProps as HeadlessInputProps,
 } from "@headlessui/react";
-import { clsx } from "clsx";
+import clsx from "clsx";
 import type React from "react";
 
 export function InputGroup({
 	children,
-}: Readonly<React.ComponentPropsWithoutRef<"span">>) {
+}: React.ComponentPropsWithoutRef<"span">) {
 	return (
 		<span
 			className={clsx(
-				"relative block",
-				"[&_input]:has-[[data-slot=icon]:last-child]:pr-10 [&_input]:has-[[data-slot=icon]:first-child]:pl-10 sm:[&_input]:has-[[data-slot=icon]:last-child]:pr-8 sm:[&_input]:has-[[data-slot=icon]:first-child]:pl-8",
-				"*:data-[slot=icon]:absolute *:data-[slot=icon]:top-3 *:data-[slot=icon]:z-10 *:data-[slot=icon]:size-5 sm:*:data-[slot=icon]:top-2.5 sm:*:data-[slot=icon]:size-4",
+				"relative isolate block",
+				"has-[[data-slot=icon]:last-child]:[&_input]:pr-10 has-[[data-slot=icon]:first-child]:[&_input]:pl-10 sm:has-[[data-slot=icon]:last-child]:[&_input]:pr-8 sm:has-[[data-slot=icon]:first-child]:[&_input]:pl-8",
+				"*:data-[slot=icon]:pointer-events-none *:data-[slot=icon]:absolute *:data-[slot=icon]:top-3 *:data-[slot=icon]:z-10 *:data-[slot=icon]:size-5 sm:*:data-[slot=icon]:top-2.5 sm:*:data-[slot=icon]:size-4",
 				"[&>[data-slot=icon]:first-child]:left-3 sm:[&>[data-slot=icon]:first-child]:left-2.5 [&>[data-slot=icon]:last-child]:right-3 sm:[&>[data-slot=icon]:last-child]:right-2.5",
 				"*:data-[slot=icon]:text-zinc-500 dark:*:data-[slot=icon]:text-zinc-400"
 			)}
@@ -29,9 +27,13 @@ export function InputGroup({
 const dateTypes = ["date", "datetime-local", "month", "time", "week"];
 type DateType = (typeof dateTypes)[number];
 
-type InputProps = {
+export const Input = function Input({
+	className,
+	ref,
+	...props
+}: {
 	className?: string;
-	ref?: React.Ref<HTMLInputElement>;
+	ref?: React.ForwardedRef<HTMLInputElement>;
 	type?:
 		| "email"
 		| "number"
@@ -41,9 +43,7 @@ type InputProps = {
 		| "text"
 		| "url"
 		| DateType;
-} & Omit<HeadlessInputProps, "className" | "ref">;
-
-export const Input = function Input({ className, ref, ...props }: InputProps) {
+} & Omit<HeadlessInputProps, "as" | "className">) {
 	return (
 		<span
 			className={clsx([
@@ -51,15 +51,13 @@ export const Input = function Input({ className, ref, ...props }: InputProps) {
 				// Basic layout
 				"relative block w-full",
 				// Background color + shadow applied to inset pseudo element, so shadow blends with border in light mode
-				"before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow",
+				"before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow-sm",
 				// Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
 				"dark:before:hidden",
 				// Focus ring
-				"after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset sm:after:focus-within:ring-2 sm:after:focus-within:ring-blue-500",
+				"after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-blue-500",
 				// Disabled state
-				"has-data-disabled:opacity-50 before:has-data-disabled:bg-zinc-950/5 before:has-data-disabled:shadow-none",
-				// Invalid state
-				"before:has-data-invalid:shadow-red-500/10",
+				"has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none",
 			])}
 			data-slot="control"
 		>
@@ -92,11 +90,13 @@ export const Input = function Input({ className, ref, ...props }: InputProps) {
 					// Background color
 					"bg-transparent dark:bg-white/5",
 					// Hide default focus styles
-					"focus:outline-none",
+					"focus:outline-hidden",
 					// Invalid state
-					"data-invalid:data-hover:border-red-500 data-invalid:border-red-500 data-invalid:data-hover:dark:border-red-500 data-invalid:dark:border-red-500",
+					"data-invalid:data-hover:border-red-500 data-invalid:border-red-500 dark:data-invalid:data-hover:border-red-600 dark:data-invalid:border-red-600",
 					// Disabled state
-					"data-disabled:border-zinc-950/20 dark:data-hover:data-disabled:border-white/15 data-disabled:dark:border-white/15 data-disabled:dark:bg-white/2.5",
+					"data-disabled:border-zinc-950/20 dark:data-hover:data-disabled:border-white/15 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5",
+					// System icons
+					"dark:scheme-dark",
 				])}
 			/>
 		</span>

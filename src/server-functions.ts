@@ -6,7 +6,11 @@ import {
 	listGitHubAccounts,
 	listGitHubRepositories,
 	type RepoStats,
+	TRANSFER_REPOSITORY_ARCHIVE_STATES,
+	TRANSFER_REPOSITORY_VISIBILITIES,
+	type TransferRepositoryArchiveState,
 	type TransferRepositoryResult,
+	type TransferRepositoryVisibility,
 	transferGitHubRepositories,
 } from "./github";
 
@@ -23,6 +27,33 @@ const normalizeOptionalString = (
 
 const toMessage = (error: unknown, fallbackMessage: string): string =>
 	error instanceof Error ? error.message : fallbackMessage;
+
+const getTransferResultError = (
+	failedCount: number,
+	settingsFailedCount: number
+): string | null => {
+	if (failedCount > 0 && settingsFailedCount > 0) {
+		return `${failedCount} ${
+			failedCount === 1 ? "repository" : "repositories"
+		} failed to transfer, and ${settingsFailedCount} ${
+			settingsFailedCount === 1 ? "settings update" : "settings updates"
+		} failed.`;
+	}
+
+	if (failedCount > 0) {
+		return `${failedCount} ${
+			failedCount === 1 ? "repository" : "repositories"
+		} failed to transfer.`;
+	}
+
+	if (settingsFailedCount > 0) {
+		return `${settingsFailedCount} ${
+			settingsFailedCount === 1 ? "settings update" : "settings updates"
+		} failed after transfer.`;
+	}
+
+	return null;
+};
 
 const getGitHubAccessFromHeaders = async (headers: Headers) => {
 	const { getGitHubAccessTokenFromHeaders } = await import("./auth.server");
@@ -42,9 +73,13 @@ export interface TransferPageData {
 }
 
 export interface TransferRepositoriesInput {
+	archiveState?: TransferRepositoryArchiveState;
 	from: string;
+	namePrefix?: string;
+	nameSuffix?: string;
 	repositories: string[];
 	to: string;
+	visibility?: TransferRepositoryVisibility;
 }
 
 export interface TransferRepositoriesResult {
@@ -89,12 +124,38 @@ const validateFameSearchInput = (data: FameSearchInput): FameSearchInput => ({
 	repo: normalizeOptionalString(data.repo),
 });
 
+const isTransferRepositoryArchiveState = (
+	value: unknown
+): value is TransferRepositoryArchiveState =>
+	typeof value === "string" &&
+	TRANSFER_REPOSITORY_ARCHIVE_STATES.includes(
+		value as TransferRepositoryArchiveState
+	);
+
+const isTransferRepositoryVisibility = (
+	value: unknown
+): value is TransferRepositoryVisibility =>
+	typeof value === "string" &&
+	TRANSFER_REPOSITORY_VISIBILITIES.includes(
+		value as TransferRepositoryVisibility
+	);
+
 const validateTransferRepositoriesInput = (
 	data: TransferRepositoriesInput
 ): TransferRepositoriesInput => ({
+	archiveState: isTransferRepositoryArchiveState(data.archiveState)
+		? data.archiveState
+		: "current",
 	from: data.from.trim(),
-	repositories: data.repositories.map((repository) => repository.trim()),
+	namePrefix: data.namePrefix?.trim() ?? "",
+	nameSuffix: data.nameSuffix?.trim() ?? "",
+	repositories: data.repositories
+		.map((repository) => repository.trim())
+		.filter((repository) => repository.length > 0),
 	to: data.to.trim(),
+	visibility: isTransferRepositoryVisibility(data.visibility)
+		? data.visibility
+		: "current",
 });
 
 const validateContactFormInput = (
@@ -122,29 +183,27 @@ export async function resolveTransferPageData(
 	}
 
 	try {
+		const organizations = await listGitHubAccounts(githubAuth.accessToken);
+
 		if (!search.from) {
 			return {
 				error: null,
-				organizations: await listGitHubAccounts(githubAuth.accessToken),
+				organizations,
 				repositories: null,
 			};
 		}
 
 		if (!search.to) {
-			const organizations = await listGitHubAccounts(githubAuth.accessToken);
-
 			return {
 				error: null,
-				organizations: organizations.filter(
-					(organization) => organization.handle !== search.from
-				),
+				organizations,
 				repositories: null,
 			};
 		}
 
 		return {
 			error: null,
-			organizations: null,
+			organizations,
 			repositories: await listGitHubRepositories(
 				githubAuth.accessToken,
 				search.from
@@ -281,18 +340,45 @@ export const transferRepositoriesAction = createServerFn({ method: "POST" })
 			};
 		}
 
+		if (!(data.from && data.to)) {
+			return {
+				error: "Choose both a source and destination account.",
+				results: null,
+				success: false,
+			};
+		}
+
+		if (data.from === data.to) {
+			return {
+				error: "Choose different source and destination accounts.",
+				results: null,
+				success: false,
+			};
+		}
+
 		try {
 			const results = await transferGitHubRepositories(
 				githubAuth.accessToken,
 				data.from,
 				data.to,
-				data.repositories
+				data.repositories,
+				fetch,
+				{
+					archiveState: data.archiveState,
+					namePrefix: data.namePrefix,
+					nameSuffix: data.nameSuffix,
+					visibility: data.visibility,
+				}
 			);
+			const failedCount = results.filter((result) => !result.ok).length;
+			const settingsFailedCount = results.filter(
+				(result) => result.postTransferSettings?.ok === false
+			).length;
 
 			return {
-				error: null,
+				error: getTransferResultError(failedCount, settingsFailedCount),
 				results,
-				success: true,
+				success: failedCount === 0 && settingsFailedCount === 0,
 			};
 		} catch (error) {
 			return {
