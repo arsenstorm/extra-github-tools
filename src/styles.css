@@ -1,16 +1,59 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@font-face {
+	font-display: swap;
+	font-family: "Geist";
+	font-style: normal;
+	font-weight: 100 900;
+	src: url("/fonts/GeistVF.woff") format("woff");
+}
+
+@font-face {
+	font-display: swap;
+	font-family: "Geist Mono";
+	font-style: normal;
+	font-weight: 100 900;
+	src: url("/fonts/GeistMonoVF.woff") format("woff");
+}
+
+@theme {
+	--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
+	--font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+	color-scheme: light dark;
+}
 
 * {
-  box-sizing: border-box;
+	box-sizing: border-box;
 }
 
 html,
 body,
 #app {
-  min-height: 100%;
+	min-height: 100%;
+}
+
+html {
+	background-color: white;
 }
 
 body {
-  margin: 0;
+	font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+	font-synthesis: none;
+	margin: 0;
+	text-rendering: optimizeLegibility;
 }
 
+img {
+	display: block;
+	max-width: 100%;
+}
+
+@media (prefers-color-scheme: dark) {
+	html {
+		background-color: var(--color-zinc-950);
+	}
+}

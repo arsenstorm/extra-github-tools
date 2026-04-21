@@ -1,7 +1,7 @@
 "use client";
 
 import { toast } from "sonner";
-import { authClient } from "@/auth.client";
+import { startGitHubSignIn } from "@/auth-actions";
 import { Button } from "@/components/ui/button";
 
 export default function SignInButton({
@@ -14,10 +14,13 @@ export default function SignInButton({
 			color="dark/white"
 			disabled={disabled}
 			onClick={async () => {
-				const { error } = await authClient.signIn.social({
-					callbackURL: "/",
-					provider: "github",
-				});
+				const callbackURL =
+					typeof window === "undefined"
+						? "/"
+						: `${window.location.pathname}${window.location.search}${window.location.hash}`;
+				const { error } = await startGitHubSignIn(
+					callbackURL.length > 0 ? callbackURL : "/"
+				);
 
 				if (error) {
 					toast.error("Failed to start GitHub sign-in.");

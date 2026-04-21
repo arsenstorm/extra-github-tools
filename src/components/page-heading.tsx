@@ -1,6 +1,6 @@
 "use client";
 
-import { authClient } from "@/auth.client";
+import { useAppSession } from "@/app-session";
 import SignInButton from "@/components/sign-in-button";
 import { Divider } from "@/components/ui/divider";
 import { Heading } from "@/components/ui/heading";
@@ -13,8 +13,8 @@ export default function PageHeading({
 	readonly title?: string;
 	readonly description?: string;
 }>): React.ReactNode {
-	const { data, isPending } = authClient.useSession();
-	const showButton = !data?.session;
+	const { github, session } = useAppSession();
+	const showButton = !(session && github?.hasAccessToken);
 
 	return (
 		<>
@@ -25,7 +25,7 @@ export default function PageHeading({
 				</div>
 				{showButton && (
 					<div className="flex gap-4">
-						<SignInButton disabled={isPending} />
+						<SignInButton />
 					</div>
 				)}
 			</div>

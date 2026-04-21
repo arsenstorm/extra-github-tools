@@ -2,10 +2,15 @@
 
 import {
 	ArrowRightStartOnRectangleIcon,
-	HomeIcon,
+	Cog8ToothIcon,
+	EnvelopeIcon,
+	ShieldCheckIcon,
+	UserIcon,
 } from "@heroicons/react/16/solid";
+import { useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { authClient } from "@/auth.client";
+import { useAppSession } from "@/app-session";
+import { signOutUser, startGitHubSignIn } from "@/auth-actions";
 import { Avatar } from "@/components/ui/avatar";
 import {
 	Dropdown,
@@ -29,13 +34,22 @@ import {
 } from "@/components/ui/sidebar";
 import { StackedLayout } from "@/components/ui/stacked-layout";
 
-const navItems = [{ label: "Home", to: "/" as const }] as const;
+const navItems = [
+	{ label: "Dashboard", to: "/" as const },
+	{ label: "Bulk Transfer Repositories", to: "/transfer" as const },
+	{ label: "Commit Fame", to: "/fame" as const },
+] as const;
+
+const isCurrentPath = (pathname: string, targetPath: string): boolean =>
+	targetPath === "/"
+		? pathname === "/"
+		: pathname === targetPath || pathname.startsWith(`${targetPath}/`);
 
 function SignOutButton() {
 	return (
 		<DropdownItem
 			onClick={async () => {
-				const { error } = await authClient.signOut();
+				const { error } = await signOutUser();
 
 				if (error) {
 					toast.error("Failed to sign out. Please try again.");
@@ -51,56 +65,108 @@ function SignOutButton() {
 	);
 }
 
+function SignInMenuItem() {
+	return (
+		<DropdownItem
+			onClick={async () => {
+				const { error } = await startGitHubSignIn(
+					typeof window === "undefined"
+						? "/"
+						: `${window.location.pathname}${window.location.search}${window.location.hash}`
+				);
+
+				if (error) {
+					toast.error("Failed to start GitHub sign-in.");
+				}
+			}}
+		>
+			<UserIcon />
+			<DropdownLabel>Sign in with GitHub</DropdownLabel>
+		</DropdownItem>
+	);
+}
+
 export function Navigation({
 	children,
 }: {
 	readonly children: React.ReactNode;
 }): React.ReactNode {
-	const { data } = authClient.useSession();
+	const pathname = useRouterState({
+		select: (state) => state.location.pathname,
+	});
+	const { github, githubClientId, session } = useAppSession();
 
-	const user = data?.user;
-	const userInitial =
-		user?.name?.slice(0, 1).toUpperCase() ??
-		user?.email?.slice(0, 1).toUpperCase() ??
+	const avatarSource = github?.viewer?.avatarUrl ?? session?.user.image;
+	const avatarInitial =
+		github?.viewer?.login?.slice(0, 1).toUpperCase() ??
+		session?.user.name?.slice(0, 1).toUpperCase() ??
+		session?.user.email?.slice(0, 1).toUpperCase() ??
 		"?";
+	const gitHubInstallationSettingsUrl = githubClientId
+		? `https://github.com/settings/connections/applications/${githubClientId}`
+		: null;
 
 	return (
 		<StackedLayout
 			navbar={
 				<Navbar>
 					<NavbarSection className="max-lg:hidden">
-						{navItems.map(({ label, ...linkProps }) => (
-							<NavbarItem {...linkProps} key={label}>
-								<HomeIcon />
+						{navItems.map(({ label, to }) => (
+							<NavbarItem
+								current={isCurrentPath(pathname, to)}
+								key={label}
+								to={to}
+							>
 								{label}
 							</NavbarItem>
 						))}
 					</NavbarSection>
 					<NavbarSpacer />
-					<NavbarSection className={user ? undefined : "hidden"}>
+					<NavbarSection>
 						<Dropdown>
-							<DropdownButton as={NavbarItem}>
+							<DropdownButton aria-label="Open account menu" as={NavbarItem}>
 								<Avatar
-									initials={user?.image ? undefined : userInitial}
+									initials={avatarSource ? undefined : avatarInitial}
 									square
-									src={user?.image}
+									src={avatarSource}
 								/>
 							</DropdownButton>
 							<DropdownMenu className="min-w-64">
-								<DropdownItem to="/">
-									<HomeIcon />
-									<DropdownLabel>
-										{user?.name ?? user?.email ?? "Home"}
-									</DropdownLabel>
-								</DropdownItem>
-								{user?.email ? (
-									<DropdownItem href={`mailto:${user.email}`}>
-										<HomeIcon />
-										<DropdownLabel>{user.email}</DropdownLabel>
-									</DropdownItem>
+								{github?.viewer ? (
+									<>
+										<DropdownItem
+											href={github.viewer.htmlUrl}
+											rel="noopener noreferrer"
+											target="_blank"
+										>
+											<UserIcon />
+											<DropdownLabel>My GitHub Profile</DropdownLabel>
+										</DropdownItem>
+										{gitHubInstallationSettingsUrl ? (
+											<DropdownItem
+												href={gitHubInstallationSettingsUrl}
+												rel="noopener noreferrer"
+												target="_blank"
+											>
+												<Cog8ToothIcon />
+												<DropdownLabel>
+													GitHub Installation Settings
+												</DropdownLabel>
+											</DropdownItem>
+										) : null}
+										<DropdownDivider />
+									</>
 								) : null}
-								{data?.session ? <DropdownDivider /> : null}
-								<SignOutButton />
+								<DropdownItem to="/privacy">
+									<ShieldCheckIcon />
+									<DropdownLabel>Privacy policy</DropdownLabel>
+								</DropdownItem>
+								<DropdownItem to="/contact">
+									<EnvelopeIcon />
+									<DropdownLabel>Contact</DropdownLabel>
+								</DropdownItem>
+								<DropdownDivider />
+								{session ? <SignOutButton /> : <SignInMenuItem />}
 							</DropdownMenu>
 						</Dropdown>
 					</NavbarSection>
@@ -110,8 +176,12 @@ export function Navigation({
 				<Sidebar>
 					<SidebarBody>
 						<SidebarSection>
-							{navItems.map(({ label, ...linkProps }) => (
-								<SidebarItem {...linkProps} key={label}>
+							{navItems.map(({ label, to }) => (
+								<SidebarItem
+									current={isCurrentPath(pathname, to)}
+									key={label}
+									to={to}
+								>
 									{label}
 								</SidebarItem>
 							))}

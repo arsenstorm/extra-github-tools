@@ -31,7 +31,7 @@ export function Avatar({
 			className={clsx(
 				className,
 				// Basic layout
-				"inline-grid shrink-0 align-middle [--avatar-radius:20%] [--ring-opacity:20%] *:col-start-1 *:row-start-1",
+				"inline-grid size-8 shrink-0 overflow-hidden align-middle [--avatar-radius:20%] [--ring-opacity:20%] *:col-start-1 *:row-start-1 *:size-full",
 				"outline-2 outline-black/(--ring-opacity) -outline-offset-1 dark:outline-white/(--ring-opacity)",
 				// Add the correct border radius
 				square
@@ -58,7 +58,15 @@ export function Avatar({
 					</text>
 				</svg>
 			)}
-			{src && <img alt={alt} height={512} src={src} width={512} />}
+			{src && (
+				<img
+					alt={alt}
+					className="object-cover"
+					height={512}
+					src={src}
+					width={512}
+				/>
+			)}
 		</span>
 	);
 }

@@ -93,7 +93,7 @@ export const NavbarItem = function NavbarItem({
 		// Trailing icon (down chevron or similar)
 		"data-[slot=icon]:last:not-nth-2:*:ml-auto data-[slot=icon]:last:not-nth-2:*:size-5 sm:data-[slot=icon]:last:not-nth-2:*:size-4",
 		// Avatar
-		"data-[slot=avatar]:*:-m-0.5 data-[slot=avatar]:*:size-7 sm:data-[slot=avatar]:*:size-6 data-[slot=avatar]:*:[--avatar-radius:var(--radius)] data-[slot=avatar]:*:[--ring-opacity:10%]",
+		"*:data-[slot=avatar]:-m-0.5 *:data-[slot=avatar]:size-7 sm:*:data-[slot=avatar]:size-6 *:data-[slot=avatar]:[--avatar-radius:var(--radius)] *:data-[slot=avatar]:[--ring-opacity:10%]",
 		// Hover
 		"data-hover:bg-zinc-950/5 data-[slot=icon]:*:data-hover:fill-zinc-950",
 		// Active
