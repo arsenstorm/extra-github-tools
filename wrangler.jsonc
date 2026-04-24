@@ -26,7 +26,7 @@
       "vars": {
         "AUTH_URL": "https://eght.arsenstorm.com",
         "GITHUB_CLIENT_ID": "Ov23liOmxzjbgoHCGTLE",
-      },
+      },"name": "extra-github-tools",
     }
   },
   "routes": [
