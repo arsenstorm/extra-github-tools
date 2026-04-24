@@ -7,7 +7,6 @@ import {
 } from "@heroicons/react/16/solid";
 import { useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { CONFIG } from "#/config.ts";
 import { useAppSession } from "@/app-session";
 import { signOutUser, startGitHubSignIn } from "@/auth-actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -32,6 +31,7 @@ import {
 	SidebarSection,
 } from "@/components/ui/sidebar";
 import { StackedLayout } from "@/components/ui/stacked-layout";
+import { CONFIG } from "@/config.ts";
 
 const navItems: { enabled?: boolean; label: string; to: string }[] = [
 	{ label: "Dashboard", to: "/" as const },

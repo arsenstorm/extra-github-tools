@@ -7,13 +7,13 @@ import {
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { CONFIG } from "#/config.ts";
 import { useAppSession } from "@/app-session";
 import { TransferPageContent } from "@/components/transfer/transfer-page-content";
 import {
 	getTransferResultCounts,
 	showTransferResultToast,
 } from "@/components/transfer/utils";
+import { CONFIG } from "@/config.ts";
 import {
 	getTransferPageData,
 	transferRepositoriesAction,
