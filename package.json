@@ -46,7 +46,7 @@
     "format": "biome format",
     "lint": "biome lint",
     "check": "ultracite check",
-    "deploy": "bun run build && wrangler deploy",
+    "deploy": "bun run build && wrangler deploy --env production",
     "fix": "ultracite fix",
     "prepare": "husky"
   },
