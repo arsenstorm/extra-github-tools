@@ -10,9 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransferRouteImport } from './routes/transfer'
-import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as FameRouteImport } from './routes/fame'
-import { Route as ContactRouteImport } from './routes/contact'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiWebhooksRouteImport } from './routes/api/webhooks'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -22,19 +20,9 @@ const TransferRoute = TransferRouteImport.update({
   path: '/transfer',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PrivacyRoute = PrivacyRouteImport.update({
-  id: '/privacy',
-  path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const FameRoute = FameRouteImport.update({
   id: '/fame',
   path: '/fame',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ContactRoute = ContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -55,18 +43,14 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/contact': typeof ContactRoute
   '/fame': typeof FameRoute
-  '/privacy': typeof PrivacyRoute
   '/transfer': typeof TransferRoute
   '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/contact': typeof ContactRoute
   '/fame': typeof FameRoute
-  '/privacy': typeof PrivacyRoute
   '/transfer': typeof TransferRoute
   '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -74,48 +58,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/contact': typeof ContactRoute
   '/fame': typeof FameRoute
-  '/privacy': typeof PrivacyRoute
   '/transfer': typeof TransferRoute
   '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/contact'
-    | '/fame'
-    | '/privacy'
-    | '/transfer'
-    | '/api/webhooks'
-    | '/api/auth/$'
+  fullPaths: '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/contact'
-    | '/fame'
-    | '/privacy'
-    | '/transfer'
-    | '/api/webhooks'
-    | '/api/auth/$'
-  id:
-    | '__root__'
-    | '/'
-    | '/contact'
-    | '/fame'
-    | '/privacy'
-    | '/transfer'
-    | '/api/webhooks'
-    | '/api/auth/$'
+  to: '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
+  id: '__root__' | '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ContactRoute: typeof ContactRoute
   FameRoute: typeof FameRoute
-  PrivacyRoute: typeof PrivacyRoute
   TransferRoute: typeof TransferRoute
   ApiWebhooksRoute: typeof ApiWebhooksRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -130,25 +88,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TransferRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/privacy': {
-      id: '/privacy'
-      path: '/privacy'
-      fullPath: '/privacy'
-      preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/fame': {
       id: '/fame'
       path: '/fame'
       fullPath: '/fame'
       preLoaderRoute: typeof FameRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/contact': {
-      id: '/contact'
-      path: '/contact'
-      fullPath: '/contact'
-      preLoaderRoute: typeof ContactRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -177,9 +121,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ContactRoute: ContactRoute,
   FameRoute: FameRoute,
-  PrivacyRoute: PrivacyRoute,
   TransferRoute: TransferRoute,
   ApiWebhooksRoute: ApiWebhooksRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

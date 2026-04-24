@@ -1,4 +1,4 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAppSession } from "@/app-session";
@@ -21,6 +21,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Strong, Text, TextLink } from "@/components/ui/text";
+import { CONFIG } from "@/config";
 import type { GitHubAccount, GitHubRepository, RepoStats } from "@/github";
 import { type FamePageData, getFamePageData } from "@/server-functions";
 
@@ -46,6 +47,11 @@ const getGitHubAccessRefreshDescription = (): string =>
 
 export const Route = createFileRoute("/fame")({
 	component: FameRoute,
+	beforeLoad: () => {
+		if (!CONFIG.commitFame.enabled) {
+			throw redirect({ to: "/" });
+		}
+	},
 	head: () => ({
 		meta: [
 			{

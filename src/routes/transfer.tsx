@@ -2,6 +2,7 @@ import { Checkbox } from "@headlessui/react";
 import { MagnifyingGlassIcon } from "@heroicons/react/16/solid";
 import {
 	createFileRoute,
+	redirect,
 	useRouter,
 	useRouterState,
 } from "@tanstack/react-router";
@@ -23,6 +24,7 @@ import {
 	useState,
 } from "react";
 import { toast } from "sonner";
+import { CONFIG } from "#/config.ts";
 import { useAppSession } from "@/app-session";
 import PageHeading from "@/components/page-heading";
 import RequireSignIn from "@/components/require-sign-in";
@@ -383,6 +385,11 @@ const showTransferResultToast = (result: TransferRepositoriesResult): void => {
 
 export const Route = createFileRoute("/transfer")({
 	component: TransferRoute,
+	beforeLoad: () => {
+		if (!CONFIG.bulkTransferRepositories.enabled) {
+			throw redirect({ to: "/" });
+		}
+	},
 	head: () => ({
 		meta: [
 			{

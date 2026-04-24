@@ -1,7 +1,26 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "tanstack-start-app",
-  "compatibility_date": "2025-09-02",
+  "name": "extra-github-tools",
+  "compatibility_date": "2026-04-24",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "@tanstack/react-start/server-entry"
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true
+    }
+  },
+  "routes": [
+    {
+      "pattern": "https://eght.arsenstorm.com/*",
+      "zone_name": "eght.arsenstorm.com",
+      "custom_domain": false
+    },
+    {
+      "pattern": "eght.arsenstorm.com",
+      "zone_name": "eght.arsenstorm.com",
+      "custom_domain": true
+    }
+  ],
 }

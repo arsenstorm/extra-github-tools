@@ -3,12 +3,11 @@
 import {
 	ArrowRightStartOnRectangleIcon,
 	Cog8ToothIcon,
-	EnvelopeIcon,
-	ShieldCheckIcon,
 	UserIcon,
 } from "@heroicons/react/16/solid";
 import { useRouterState } from "@tanstack/react-router";
 import { toast } from "sonner";
+import { CONFIG } from "#/config.ts";
 import { useAppSession } from "@/app-session";
 import { signOutUser, startGitHubSignIn } from "@/auth-actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -34,10 +33,18 @@ import {
 } from "@/components/ui/sidebar";
 import { StackedLayout } from "@/components/ui/stacked-layout";
 
-const navItems = [
+const navItems: { enabled?: boolean; label: string; to: string }[] = [
 	{ label: "Dashboard", to: "/" as const },
-	{ label: "Bulk Transfer Repositories", to: "/transfer" as const },
-	{ label: "Commit Fame", to: "/fame" as const },
+	{
+		enabled: CONFIG.bulkTransferRepositories.enabled,
+		label: "Bulk Transfer Repositories",
+		to: "/transfer" as const,
+	},
+	{
+		enabled: CONFIG.commitFame.enabled,
+		label: "Commit Fame",
+		to: "/fame" as const,
+	},
 ] as const;
 
 const isCurrentPath = (pathname: string, targetPath: string): boolean =>
@@ -111,15 +118,17 @@ export function Navigation({
 			navbar={
 				<Navbar>
 					<NavbarSection className="max-lg:hidden">
-						{navItems.map(({ label, to }) => (
-							<NavbarItem
-								current={isCurrentPath(pathname, to)}
-								key={label}
-								to={to}
-							>
-								{label}
-							</NavbarItem>
-						))}
+						{navItems
+							.filter((item) => item.enabled ?? true)
+							.map(({ label, to }) => (
+								<NavbarItem
+									current={isCurrentPath(pathname, to)}
+									key={label}
+									to={to}
+								>
+									{label}
+								</NavbarItem>
+							))}
 					</NavbarSection>
 					<NavbarSpacer />
 					<NavbarSection>
@@ -157,15 +166,6 @@ export function Navigation({
 										<DropdownDivider />
 									</>
 								) : null}
-								<DropdownItem to="/privacy">
-									<ShieldCheckIcon />
-									<DropdownLabel>Privacy policy</DropdownLabel>
-								</DropdownItem>
-								<DropdownItem to="/contact">
-									<EnvelopeIcon />
-									<DropdownLabel>Contact</DropdownLabel>
-								</DropdownItem>
-								<DropdownDivider />
 								{session ? <SignOutButton /> : <SignInMenuItem />}
 							</DropdownMenu>
 						</Dropdown>
