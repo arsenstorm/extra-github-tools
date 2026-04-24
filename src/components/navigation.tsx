@@ -31,7 +31,7 @@ import {
 	SidebarSection,
 } from "@/components/ui/sidebar";
 import { StackedLayout } from "@/components/ui/stacked-layout";
-import { CONFIG } from "@/config.ts";
+import { CONFIG } from "@/config";
 
 const navItems: { enabled?: boolean; label: string; to: string }[] = [
 	{ label: "Dashboard", to: "/" as const },

@@ -4,7 +4,7 @@ import { Button, type Colors } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Subheading } from "@/components/ui/heading";
 import { Strong, Text, TextLink } from "@/components/ui/text";
-import { CONFIG } from "@/config.ts";
+import { CONFIG } from "@/config";
 
 const options: {
 	enabled?: boolean;

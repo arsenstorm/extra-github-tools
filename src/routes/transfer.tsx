@@ -13,7 +13,7 @@ import {
 	getTransferResultCounts,
 	showTransferResultToast,
 } from "@/components/transfer/utils";
-import { CONFIG } from "@/config.ts";
+import { CONFIG } from "@/config";
 import {
 	getTransferPageData,
 	transferRepositoriesAction,
