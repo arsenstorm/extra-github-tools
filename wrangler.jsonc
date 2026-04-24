@@ -11,6 +11,24 @@
       "enabled": true
     }
   },
+  "vars": {
+    "AUTH_URL": "http://localhost:3000",
+    "GITHUB_CLIENT_ID": "Ov23lidiQ9BJzVGl0Uxh",
+  },
+  "secrets": {
+    "required": [
+      "AUTH_SECRET",
+      "GITHUB_CLIENT_SECRET",
+    ]
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "AUTH_URL": "https://eght.arsenstorm.com",
+        "GITHUB_CLIENT_ID": "Ov23liOmxzjbgoHCGTLE",
+      },
+    }
+  },
   "routes": [
     {
       "pattern": "https://eght.arsenstorm.com/*",
