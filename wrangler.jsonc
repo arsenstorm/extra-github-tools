@@ -32,12 +32,12 @@
   "routes": [
     {
       "pattern": "https://eght.arsenstorm.com/*",
-      "zone_name": "eght.arsenstorm.com",
+      "zone_name": "arsenstorm.com",
       "custom_domain": false
     },
     {
       "pattern": "eght.arsenstorm.com",
-      "zone_name": "eght.arsenstorm.com",
+      "zone_name": "arsenstorm.com",
       "custom_domain": true
     }
   ],
