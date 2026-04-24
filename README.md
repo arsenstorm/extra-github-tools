@@ -14,12 +14,10 @@ Transfer many repositories at once to a new owner.
 
 If you have any ideas for tools that you’d like to see, reach out to me and I’ll see what I can do!
 
-## Self-Hosting
-
-I’ll write a guide on this if there’s enough interest.
-
 ## License
 
 This repository is licensed under the GNU GPLv3 License. See the [LICENSE](LICENSE) file for details.
 
 I chose this because I believe that the tools provided here should be free and open-source for everyone to use and modify, but not to sell.
+
+<sub>Copyright © 2026 [Arsen Shkrumelyak](https://arsenstorm.com). All rights reserved.</sub>
