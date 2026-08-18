@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as FameRouteImport } from './routes/fame'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ApiWebhooksRouteImport } from './routes/api/webhooks'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const TransferRoute = TransferRouteImport.update({
@@ -30,11 +29,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiWebhooksRoute = ApiWebhooksRouteImport.update({
-  id: '/api/webhooks',
-  path: '/api/webhooks',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -45,14 +39,12 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
   '/transfer': typeof TransferRoute
-  '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
   '/transfer': typeof TransferRoute
-  '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
@@ -60,22 +52,20 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
   '/transfer': typeof TransferRoute
-  '/api/webhooks': typeof ApiWebhooksRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
+  fullPaths: '/' | '/fame' | '/transfer' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
-  id: '__root__' | '/' | '/fame' | '/transfer' | '/api/webhooks' | '/api/auth/$'
+  to: '/' | '/fame' | '/transfer' | '/api/auth/$'
+  id: '__root__' | '/' | '/fame' | '/transfer' | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FameRoute: typeof FameRoute
   TransferRoute: typeof TransferRoute
-  ApiWebhooksRoute: typeof ApiWebhooksRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -102,13 +92,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/webhooks': {
-      id: '/api/webhooks'
-      path: '/api/webhooks'
-      fullPath: '/api/webhooks'
-      preLoaderRoute: typeof ApiWebhooksRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -123,7 +106,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FameRoute: FameRoute,
   TransferRoute: TransferRoute,
-  ApiWebhooksRoute: ApiWebhooksRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

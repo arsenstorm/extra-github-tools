@@ -1,22 +1,17 @@
 import { createServerFn } from "@tanstack/react-start";
-import {
-	type GitHubAccount,
-	type GitHubRepository,
-	type RepoStats,
-	TRANSFER_REPOSITORY_ARCHIVE_STATES,
-	TRANSFER_REPOSITORY_VISIBILITIES,
-	type TransferRepositoryArchiveState,
-	type TransferRepositoryResult,
-	type TransferRepositoryVisibility,
+import type {
+	GitHubAccount,
+	GitHubRepository,
+	RepoStats,
+	TransferRepositoryArchiveState,
+	TransferRepositoryResult,
+	TransferRepositoryVisibility,
 } from "./github";
-
-const normalizeOptionalString = (
-	value: string | null | undefined
-): string | undefined => {
-	const trimmedValue = value?.trim();
-
-	return trimmedValue ? trimmedValue : undefined;
-};
+import {
+	validateFameSearchInput,
+	validateTransferRepositoriesInput,
+	validateTransferSearchInput,
+} from "./server-functions.validation";
 
 export interface TransferSearchInput {
 	from?: string;
@@ -57,52 +52,6 @@ export interface FamePageData {
 	stats: RepoStats | null;
 	statsPending: boolean;
 }
-
-const validateTransferSearchInput = (
-	data: TransferSearchInput
-): TransferSearchInput => ({
-	from: normalizeOptionalString(data.from),
-	to: normalizeOptionalString(data.to),
-});
-
-const validateFameSearchInput = (data: FameSearchInput): FameSearchInput => ({
-	org: normalizeOptionalString(data.org),
-	repo: normalizeOptionalString(data.repo),
-});
-
-const isTransferRepositoryArchiveState = (
-	value: unknown
-): value is TransferRepositoryArchiveState =>
-	typeof value === "string" &&
-	TRANSFER_REPOSITORY_ARCHIVE_STATES.includes(
-		value as TransferRepositoryArchiveState
-	);
-
-const isTransferRepositoryVisibility = (
-	value: unknown
-): value is TransferRepositoryVisibility =>
-	typeof value === "string" &&
-	TRANSFER_REPOSITORY_VISIBILITIES.includes(
-		value as TransferRepositoryVisibility
-	);
-
-const validateTransferRepositoriesInput = (
-	data: TransferRepositoriesInput
-): TransferRepositoriesInput => ({
-	archiveState: isTransferRepositoryArchiveState(data.archiveState)
-		? data.archiveState
-		: "current",
-	from: data.from.trim(),
-	namePrefix: data.namePrefix?.trim() ?? "",
-	nameSuffix: data.nameSuffix?.trim() ?? "",
-	repositories: data.repositories
-		.map((repository) => repository.trim())
-		.filter((repository) => repository.length > 0),
-	to: data.to.trim(),
-	visibility: isTransferRepositoryVisibility(data.visibility)
-		? data.visibility
-		: "current",
-});
 
 export const getTransferPageData = createServerFn({ method: "GET" })
 	.inputValidator(validateTransferSearchInput)

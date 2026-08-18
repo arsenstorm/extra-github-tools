@@ -63,7 +63,7 @@ export const auth = betterAuth({
 		github: {
 			clientId: getGitHubClientId() ?? "",
 			clientSecret: getGitHubClientSecret() ?? "",
-			scope: ["read:user", "user:email", "repo", "admin:org"],
+			scope: ["read:user", "read:org", "repo"],
 		},
 	},
 	plugins: [tanstackStartCookies()],

@@ -226,7 +226,7 @@ export function RepoAnalysisPanel({
 										</div>
 									</div>
 									<span className="font-medium text-xs text-zinc-600 dark:text-zinc-400">
-										{contributor.files.toLocaleString()} files
+										{contributor.activeWeeks.toLocaleString()} active weeks
 									</span>
 								</div>
 								<div className="flex h-2 overflow-hidden rounded-full bg-zinc-200 text-xs dark:bg-zinc-700">

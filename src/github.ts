@@ -8,6 +8,7 @@ const DEFAULT_TRANSFER_SETTINGS_ATTEMPTS = 10;
 const DEFAULT_TRANSFER_SETTINGS_DELAY_MS = 2000;
 const GITHUB_LIST_PAGE_SIZE = 100;
 const MAX_TRANSFER_CONCURRENCY = 3;
+const MAX_CONTRIBUTOR_PROFILE_CONCURRENCY = 5;
 const CONTRIBUTOR_STATS_PENDING_MESSAGE =
 	"GitHub is still calculating contributor statistics. Please try again in a moment.";
 const REPOSITORY_OPERATION_IN_PROGRESS_MESSAGE =
@@ -127,11 +128,11 @@ export interface TransferRepositorySettingsResult {
 }
 
 export interface ContributorStats {
+	activeWeeks: number;
 	additions: number;
 	commits: number;
 	deletions: number;
 	email: string;
-	files: number;
 	name: string;
 	percentage: number;
 }
@@ -185,6 +186,30 @@ const sleep = async (durationMs: number): Promise<void> =>
 	new Promise((resolve) => {
 		setTimeout(resolve, durationMs);
 	});
+
+const mapWithConcurrency = async <Item, Result>(
+	items: Item[],
+	concurrency: number,
+	mapper: (item: Item) => Promise<Result>
+): Promise<Result[]> => {
+	const results: Result[] = new Array(items.length);
+	let nextIndex = 0;
+
+	const runWorker = async (): Promise<void> => {
+		while (nextIndex < items.length) {
+			const index = nextIndex;
+
+			nextIndex += 1;
+			results[index] = await mapper(items[index] as Item);
+		}
+	};
+
+	await Promise.all(
+		Array.from({ length: Math.min(concurrency, items.length) }, runWorker)
+	);
+
+	return results;
+};
 
 const createGitHubHeaders = (
 	accessToken: string,
@@ -806,52 +831,53 @@ export async function analyzeGitHubRepository(
 		0
 	);
 
-	const contributorRowsPromise = Promise.all(
-		contributors
-			.filter(
-				(
-					contributor
-				): contributor is GitHubContributorStatsResponse & {
-					author: { login: string };
-				} => Boolean(contributor.author?.login)
-			)
-			.map(async (contributor) => {
-				const profile = await fetchGitHubJson<GitHubUserProfileResponse>(
-					`/users/${contributor.author.login}`,
-					accessToken,
-					resolvedOptions.fetchImplementation,
-					undefined,
-					`Failed to load the GitHub profile for ${contributor.author.login}.`
-				);
+	const contributorsWithAuthor = contributors.filter(
+		(
+			contributor
+		): contributor is GitHubContributorStatsResponse & {
+			author: { login: string };
+		} => Boolean(contributor.author?.login)
+	);
+	const contributorRowsPromise = mapWithConcurrency(
+		contributorsWithAuthor,
+		MAX_CONTRIBUTOR_PROFILE_CONCURRENCY,
+		async (contributor) => {
+			const profile = await fetchGitHubJson<GitHubUserProfileResponse>(
+				`/users/${contributor.author.login}`,
+				accessToken,
+				resolvedOptions.fetchImplementation,
+				undefined,
+				`Failed to load the GitHub profile for ${contributor.author.login}.`
+			);
 
-				let additions = 0;
-				let deletions = 0;
-				let files = 0;
+			let activeWeeks = 0;
+			let additions = 0;
+			let deletions = 0;
 
-				for (const week of contributor.weeks ?? []) {
-					additions += week.a || 0;
-					deletions += week.d || 0;
+			for (const week of contributor.weeks ?? []) {
+				additions += week.a || 0;
+				deletions += week.d || 0;
 
-					if (week.c > 0) {
-						files += 1;
-					}
+				if (week.c > 0) {
+					activeWeeks += 1;
 				}
+			}
 
-				return {
-					additions,
-					commits: contributor.total || 0,
-					deletions,
-					email:
-						profile.email ??
-						`${contributor.author.login}@users.noreply.github.com`,
-					files,
-					name: profile.name ?? contributor.author.login,
-					percentage:
-						totalCommits > 0
-							? ((contributor.total || 0) / totalCommits) * 100
-							: 0,
-				} satisfies ContributorStats;
-			})
+			return {
+				activeWeeks,
+				additions,
+				commits: contributor.total || 0,
+				deletions,
+				email:
+					profile.email ??
+					`${contributor.author.login}@users.noreply.github.com`,
+				name: profile.name ?? contributor.author.login,
+				percentage:
+					totalCommits > 0
+						? ((contributor.total || 0) / totalCommits) * 100
+						: 0,
+			} satisfies ContributorStats;
+		}
 	);
 
 	const repository = await fetchGitHubJson<GitHubRepositoryInfoResponse>(

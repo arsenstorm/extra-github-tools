@@ -1,0 +1,5 @@
+# See https://git-scm.com/docs/gitattributes for more about git attribute files.
+
+# Generated files: collapse in diffs and exclude from language stats.
+src/routeTree.gen.ts linguist-generated
+bun.lock linguist-generated
