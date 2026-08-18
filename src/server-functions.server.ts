@@ -66,15 +66,7 @@ export async function resolveTransferPageData(
 	try {
 		const organizations = await listGitHubAccounts(githubAuth.accessToken);
 
-		if (!search.from) {
-			return {
-				error: null,
-				organizations,
-				repositories: null,
-			};
-		}
-
-		if (!search.to) {
+		if (!(search.from && search.to)) {
 			return {
 				error: null,
 				organizations,
