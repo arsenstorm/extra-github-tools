@@ -1,4 +1,24 @@
 {
+  "name": "extra-github-tools",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "check": "ultracite check",
+    "deploy": "bun run build && wrangler deploy",
+    "dev": "vite dev --port 3000",
+    "fix": "ultracite fix",
+    "format": "biome format",
+    "lint": "biome lint",
+    "prepare": "husky",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "overrides": {
+    "solid-js": "^1.9.15"
+  },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.52.1",
     "@headlessui/react": "^2.2.10",
@@ -36,22 +56,5 @@
     "vite": "^8.2.1",
     "vitest": "^4.1.10",
     "wrangler": "^4.123.0"
-  },
-  "name": "extra-github-tools",
-  "scripts": {
-    "dev": "vite dev --port 3000",
-    "build": "vite build",
-    "preview": "vite preview",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "format": "biome format",
-    "lint": "biome lint",
-    "check": "ultracite check",
-    "deploy": "bun run build && wrangler deploy",
-    "fix": "ultracite fix",
-    "prepare": "husky"
-  },
-  "type": "module",
-  "private": true,
-  "license": "MIT"
+  }
 }
