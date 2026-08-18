@@ -232,11 +232,11 @@ describe("analyzeGitHubRepository", () => {
 		expect(stats).toMatchObject({
 			contributors: [
 				{
+					activeWeeks: 1,
 					additions: 11,
 					commits: 3,
 					deletions: 4,
 					email: "alice@users.noreply.github.com",
-					files: 1,
 					name: "Alice",
 					percentage: 100,
 				},
@@ -335,6 +335,79 @@ describe("analyzeGitHubRepository", () => {
 		expect(requestedUrls).toEqual([
 			"https://api.github.com/repos/source/repo/stats/contributors",
 		]);
+	});
+
+	it("limits concurrent contributor profile requests", async () => {
+		const contributors = Array.from({ length: 12 }, (_item, index) => ({
+			author: {
+				login: `user-${index}`,
+			},
+			total: 1,
+			weeks: [
+				{
+					a: 1,
+					c: 1,
+					d: 0,
+				},
+			],
+		}));
+		let inFlight = 0;
+		let maxInFlight = 0;
+		const fetchImplementation = createFetchImplementation(async (url) => {
+			if (url.endsWith("/repos/source/repo")) {
+				return new Response(JSON.stringify(createRepositoryInfoResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/git/trees/main?recursive=1")) {
+				return new Response(JSON.stringify(createTreeResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/stats/contributors")) {
+				return new Response(JSON.stringify(contributors), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.includes("/users/")) {
+				const login = url.split("/users/")[1];
+
+				inFlight += 1;
+				maxInFlight = Math.max(maxInFlight, inFlight);
+
+				await new Promise((resolve) => {
+					setTimeout(resolve, 1);
+				});
+
+				inFlight -= 1;
+
+				return new Response(
+					JSON.stringify({ email: null, login, name: null }),
+					{
+						status: 200,
+						statusText: "OK",
+					}
+				);
+			}
+
+			return new Response("not found", {
+				status: 404,
+				statusText: "Not Found",
+			});
+		});
+
+		const stats = await analyzeGitHubRepository("token", "source", "repo", {
+			fetchImplementation,
+		});
+
+		expect(maxInFlight).toBeLessThanOrEqual(5);
+		expect(stats.contributors).toHaveLength(12);
 	});
 });
 
