@@ -27,3 +27,6 @@ if [ $FORMAT_EXIT_CODE -ne 0 ]; then
 fi
 
 echo "✨ Files formatted by Ultracite"
+
+# Typecheck
+bun run typecheck
