@@ -1,4 +1,9 @@
 {
+  "extends": [
+    "ultracite/biome/core",
+    "ultracite/biome/react",
+    "ultracite/biome/remix"
+  ],
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "vcs": {
     "enabled": false,
@@ -37,10 +42,5 @@
     "formatter": {
       "quoteStyle": "double"
     }
-  },
-  "extends": [
-    "ultracite/biome/core",
-    "ultracite/biome/react",
-    "ultracite/biome/remix"
-  ]
+  }
 }

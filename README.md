@@ -30,11 +30,13 @@ The app asks for the `read:user`, `read:org` and `repo` scopes. `repo` is what l
 
 ### Deploying to Cloudflare Workers
 
-`wrangler.jsonc` has a `production` environment. Set the non-secret vars there, then:
+All four variables are Worker secrets, so nothing environment-specific lives in `wrangler.jsonc`:
 
 ```sh
-wrangler secret put AUTH_SECRET --env production
-wrangler secret put GITHUB_CLIENT_SECRET --env production
+wrangler secret put AUTH_URL
+wrangler secret put AUTH_SECRET
+wrangler secret put GITHUB_CLIENT_ID
+wrangler secret put GITHUB_CLIENT_SECRET
 bun run deploy
 ```
 
