@@ -52,5 +52,6 @@
     "prepare": "husky"
   },
   "type": "module",
-  "private": true
+  "private": true,
+  "license": "MIT"
 }

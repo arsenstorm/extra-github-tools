@@ -54,8 +54,6 @@ The pre-commit hook runs the formatter and the typecheck.
 
 ## License
 
-This repository is licensed under the GNU GPLv3 License. See the [LICENSE](LICENSE) file for details.
-
-I chose this because I believe that the tools provided here should be free and open-source for everyone to use and modify, and anything built on top of them should stay that way too.
+This repository is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
 <sub>Copyright © 2026 [Arsen Shkrumelyak](https://arsenstorm.com). All rights reserved.</sub>
