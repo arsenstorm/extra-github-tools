@@ -58,4 +58,4 @@ The pre-commit hook runs the formatter and the typecheck.
 
 This repository is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
 
-<sub>Copyright © 2026 [Arsen Shkrumelyak](https://arsenstorm.com). All rights reserved.</sub>
+<sub>Copyright © 2026 [Arsen Shkrumelyak](https://arsenstorm.com).</sub>
