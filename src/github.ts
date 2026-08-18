@@ -200,6 +200,7 @@ const mapWithConcurrency = async <Item, Result>(
 			const index = nextIndex;
 
 			nextIndex += 1;
+			// biome-ignore lint/performance/noAwaitInLoops: each worker processes its slice sequentially; concurrency comes from running several workers
 			results[index] = await mapper(items[index] as Item);
 		}
 	};
@@ -326,8 +327,9 @@ const fetchGitHubPaginatedJson = async <ResponseData>(
 	let page = 1;
 	let response = firstResponse;
 
-	while (true) {
+	for (;;) {
 		if (!response.ok) {
+			// biome-ignore lint/performance/noAwaitInLoops: pages must be fetched in order until a short page ends the list
 			throw await createGitHubError(response, fallbackMessage);
 		}
 
@@ -408,8 +410,8 @@ const mapGitHubRepositories = (
 ): GitHubRepository[] =>
 	repositories.map((repository) => ({
 		archived: repository.archived,
-		fullName: repository.full_name,
 		fork: repository.fork,
+		fullName: repository.full_name,
 		htmlUrl: repository.html_url,
 		id: repository.id,
 		name: repository.name,
@@ -667,6 +669,7 @@ const updateTransferredRepositorySettings = async (
 
 	for (let attempt = 1; attempt <= options.maxAttempts; attempt += 1) {
 		try {
+			// biome-ignore lint/performance/noAwaitInLoops: retries are sequential by design
 			const response = await fetchGitHubResponse(
 				`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repository)}`,
 				accessToken,
@@ -756,6 +759,7 @@ const getContributorStatsWithRetry = async (
 		attempt <= options.maxContributorStatsAttempts;
 		attempt += 1
 	) {
+		// biome-ignore lint/performance/noAwaitInLoops: retries are sequential by design
 		const response = await fetchGitHubResponse(
 			`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}/stats/contributors`,
 			accessToken,

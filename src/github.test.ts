@@ -376,7 +376,7 @@ describe("analyzeGitHubRepository", () => {
 			}
 
 			if (url.includes("/users/")) {
-				const login = url.split("/users/")[1];
+				const [, login] = url.split("/users/");
 
 				inFlight += 1;
 				maxInFlight = Math.max(maxInFlight, inFlight);

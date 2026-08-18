@@ -177,12 +177,12 @@ export const SidebarItem = function SidebarItem({
 
 	return (
 		<span className={clsx(className, "relative")}>
-			{current && (
+			{current ? (
 				<motion.span
 					className="absolute inset-y-2 -left-4 w-0.5 rounded-full bg-zinc-950 dark:bg-white"
 					layoutId="current-indicator"
 				/>
-			)}
+			) : null}
 			{(() => {
 				if ("to" in props) {
 					return (

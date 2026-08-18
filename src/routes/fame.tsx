@@ -25,12 +25,12 @@ const validateFameSearch = (search: Record<string, unknown>): FameSearch => ({
 });
 
 export const Route = createFileRoute("/fame")({
-	component: FameRoute,
 	beforeLoad: () => {
 		if (!CONFIG.commitFame.enabled) {
 			throw redirect({ to: "/" });
 		}
 	},
+	component: FameRoute,
 	head: () => ({
 		meta: [
 			{

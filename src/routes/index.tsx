@@ -13,9 +13,9 @@ const options: {
 	link: { color: Colors; href: string; label: string };
 }[] = [
 	{
-		enabled: CONFIG.bulkTransferRepositories.enabled,
 		description:
 			"Move your repositories in bulk between organizations and personal accounts.",
+		enabled: CONFIG.bulkTransferRepositories.enabled,
 		label: "Bulk Transfer Repositories",
 		link: {
 			color: "cyan",
@@ -24,9 +24,9 @@ const options: {
 		},
 	},
 	{
-		enabled: CONFIG.commitFame.enabled,
 		description:
 			"See how your commits compare to your colleagues and who's doing more.",
+		enabled: CONFIG.commitFame.enabled,
 		label: "Commit Fame",
 		link: {
 			color: "amber",

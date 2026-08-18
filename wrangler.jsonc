@@ -2,9 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "extra-github-tools",
   "compatibility_date": "2026-04-24",
-  "compatibility_flags": [
-    "nodejs_compat"
-  ],
+  "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "observability": {
     "enabled": true,
@@ -18,8 +16,8 @@
       "AUTH_URL",
       "AUTH_SECRET",
       "GITHUB_CLIENT_ID",
-      "GITHUB_CLIENT_SECRET",
-    ],
+      "GITHUB_CLIENT_SECRET"
+    ]
   },
   "routes": [
     {
@@ -27,5 +25,5 @@
       "zone_name": "arsenstorm.com",
       "custom_domain": true
     }
-  ],
+  ]
 }
