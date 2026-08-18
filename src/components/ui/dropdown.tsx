@@ -26,8 +26,8 @@ import clsx from "clsx";
 import type React from "react";
 import { Button } from "./button";
 
-export function Dropdown(props: HeadlessMenuProps) {
-	return <HeadlessMenu {...props} />;
+export function Dropdown(props: Omit<HeadlessMenuProps<"div">, "as">) {
+	return <HeadlessMenu as="div" {...props} />;
 }
 
 export function DropdownButton<T extends React.ElementType = typeof Button>({
