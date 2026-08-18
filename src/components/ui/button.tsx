@@ -149,8 +149,9 @@ type ButtonProps = (
 	| { color?: never; outline?: never; plain: true }
 ) & { children: React.ReactNode; className?: string } & (
 		| Omit<HeadlessButtonProps, "className">
-		| (Omit<React.ComponentPropsWithoutRef<typeof Link>, "className"> & {
+		| (Omit<React.ComponentPropsWithoutRef<typeof Link>, "className" | "to"> & {
 				href?: never;
+				to: NonNullable<React.ComponentPropsWithoutRef<typeof Link>["to"]>;
 		  })
 		| (Omit<React.ComponentPropsWithoutRef<"a">, "className"> & {
 				href: string;
