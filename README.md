@@ -38,6 +38,8 @@ wrangler secret put GITHUB_CLIENT_SECRET --env production
 bun run deploy
 ```
 
+CI also deploys every push to `main` once `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are set as repository secrets.
+
 ### How sessions work
 
 There is no database. The session and your GitHub token live in an encrypted cookie for up to seven days. Signing out clears the cookie but cannot revoke it, so keep `AUTH_SECRET` private and rotate it if you think it leaked.
