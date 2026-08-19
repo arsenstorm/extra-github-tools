@@ -171,6 +171,11 @@ export interface ManageRepositoryActions {
 	visibilityAction: ManageRepositoryVisibilityAction;
 }
 
+export interface ManageRepositoryChange {
+	actions: ManageRepositoryActions;
+	repository: string;
+}
+
 export type ManageSettingOutcome = "changed" | "failed" | "unchanged";
 
 export interface ManageSettingResult {
@@ -1489,8 +1494,7 @@ const manageOneGitHubRepository = async (
 export async function manageGitHubRepositories(
 	accessToken: string,
 	owner: string,
-	repositories: string[],
-	actions: ManageRepositoryActions,
+	changes: ManageRepositoryChange[],
 	fetchImplementation: typeof fetch = fetch,
 	options: ManageGitHubRepositoriesOptions = {}
 ): Promise<ManageRepositoryResult[]> {
@@ -1503,17 +1507,14 @@ export async function manageGitHubRepositories(
 		sleep: options.sleep ?? sleep,
 	};
 
-	return await mapWithConcurrency(
-		repositories,
-		MAX_MANAGE_CONCURRENCY,
-		(repositoryName) =>
-			manageOneGitHubRepository(
-				accessToken,
-				owner,
-				repositoryName,
-				actions,
-				resolvedOptions
-			)
+	return await mapWithConcurrency(changes, MAX_MANAGE_CONCURRENCY, (change) =>
+		manageOneGitHubRepository(
+			accessToken,
+			owner,
+			change.repository,
+			change.actions,
+			resolvedOptions
+		)
 	);
 }
 
@@ -1536,4 +1537,31 @@ export async function listGitHubWatchedRepositoryFullNames(
 	);
 
 	return repositories.map((repository) => repository.full_name);
+}
+
+interface GitHubOrganizationInfoResponse {
+	plan?: {
+		name?: string | null;
+	} | null;
+}
+
+export async function getGitHubOrganizationSupportsInternal(
+	accessToken: string,
+	account: string,
+	fetchImplementation: typeof fetch = fetch
+): Promise<boolean> {
+	const response = await fetchGitHubResponse(
+		`/orgs/${encodeURIComponent(account)}`,
+		accessToken,
+		fetchImplementation
+	);
+
+	if (!response.ok) {
+		return false;
+	}
+
+	const organization =
+		(await response.json()) as GitHubOrganizationInfoResponse;
+
+	return organization.plan?.name?.toLowerCase() === "enterprise";
 }

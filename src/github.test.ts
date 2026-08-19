@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	analyzeGitHubRepository,
+	getGitHubOrganizationSupportsInternal,
 	isGitHubContributorStatsPendingError,
 	listGitHubRepositories,
 	listGitHubWatchedRepositoryFullNames,
@@ -884,8 +885,12 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo"],
-			{ ...noChangeActions, archiveAction: "archived" },
+			[
+				{
+					actions: { ...noChangeActions, archiveAction: "archived" },
+					repository: "repo",
+				},
+			],
 			fetchImplementation
 		);
 
@@ -926,8 +931,12 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo"],
-			{ ...noChangeActions, archiveAction: "unarchived" },
+			[
+				{
+					actions: { ...noChangeActions, archiveAction: "unarchived" },
+					repository: "repo",
+				},
+			],
 			fetchImplementation
 		);
 
@@ -961,8 +970,12 @@ describe("manageGitHubRepositories", () => {
 			const results = await manageGitHubRepositories(
 				"token",
 				"owner",
-				["repo"],
-				{ ...noChangeActions, visibilityAction: targetVisibility },
+				[
+					{
+						actions: { ...noChangeActions, visibilityAction: targetVisibility },
+						repository: "repo",
+					},
+				],
 				fetchImplementation
 			);
 
@@ -992,12 +1005,16 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo"],
-			{
-				archiveAction: "archived",
-				subscriptionAction: "current",
-				visibilityAction: "private",
-			},
+			[
+				{
+					actions: {
+						archiveAction: "archived",
+						subscriptionAction: "current",
+						visibilityAction: "private",
+					},
+					repository: "repo",
+				},
+			],
 			fetchImplementation
 		);
 
@@ -1044,12 +1061,16 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo"],
-			{
-				archiveAction: "archived",
-				subscriptionAction: "current",
-				visibilityAction: "private",
-			},
+			[
+				{
+					actions: {
+						archiveAction: "archived",
+						subscriptionAction: "current",
+						visibilityAction: "private",
+					},
+					repository: "repo",
+				},
+			],
 			fetchImplementation
 		);
 
@@ -1086,8 +1107,12 @@ describe("manageGitHubRepositories", () => {
 			const results = await manageGitHubRepositories(
 				"token",
 				"owner",
-				["repo"],
-				{ ...noChangeActions, subscriptionAction: "watching" },
+				[
+					{
+						actions: { ...noChangeActions, subscriptionAction: "watching" },
+						repository: "repo",
+					},
+				],
 				fetchImplementation
 			);
 
@@ -1121,8 +1146,12 @@ describe("manageGitHubRepositories", () => {
 			const results = await manageGitHubRepositories(
 				"token",
 				"owner",
-				["repo"],
-				{ ...noChangeActions, subscriptionAction: "ignoring" },
+				[
+					{
+						actions: { ...noChangeActions, subscriptionAction: "ignoring" },
+						repository: "repo",
+					},
+				],
 				fetchImplementation
 			);
 
@@ -1150,8 +1179,12 @@ describe("manageGitHubRepositories", () => {
 			const results = await manageGitHubRepositories(
 				"token",
 				"owner",
-				["repo"],
-				{ ...noChangeActions, subscriptionAction: "unwatching" },
+				[
+					{
+						actions: { ...noChangeActions, subscriptionAction: "unwatching" },
+						repository: "repo",
+					},
+				],
 				fetchImplementation
 			);
 
@@ -1180,8 +1213,12 @@ describe("manageGitHubRepositories", () => {
 			const results = await manageGitHubRepositories(
 				"token",
 				"owner",
-				["repo"],
-				{ ...noChangeActions, subscriptionAction: "watching" },
+				[
+					{
+						actions: { ...noChangeActions, subscriptionAction: "watching" },
+						repository: "repo",
+					},
+				],
 				fetchImplementation
 			);
 
@@ -1227,8 +1264,12 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo"],
-			{ ...noChangeActions, archiveAction: "archived" },
+			[
+				{
+					actions: { ...noChangeActions, archiveAction: "archived" },
+					repository: "repo",
+				},
+			],
 			fetchImplementation,
 			{
 				sleep: (durationMs) => {
@@ -1274,8 +1315,10 @@ describe("manageGitHubRepositories", () => {
 		const results = await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo-a", "repo-b", "repo-c"],
-			{ ...noChangeActions, archiveAction: "archived" },
+			["repo-a", "repo-b", "repo-c"].map((repository) => ({
+				actions: { ...noChangeActions, archiveAction: "archived" },
+				repository,
+			})),
 			fetchImplementation,
 			{ sleep: () => Promise.resolve() }
 		);
@@ -1315,8 +1358,10 @@ describe("manageGitHubRepositories", () => {
 		await manageGitHubRepositories(
 			"token",
 			"owner",
-			["repo-one", "repo-two"],
-			{ ...noChangeActions, archiveAction: "archived" },
+			["repo-one", "repo-two"].map((repository) => ({
+				actions: { ...noChangeActions, archiveAction: "archived" },
+				repository,
+			})),
 			fetchImplementation
 		);
 
@@ -1325,6 +1370,102 @@ describe("manageGitHubRepositories", () => {
 		for (const url of requestedUrls) {
 			expect(url.includes("repo-one") || url.includes("repo-two")).toBe(true);
 		}
+	});
+
+	it("applies different actions to different repositories in one run", async () => {
+		const requestsByRepository: Record<
+			string,
+			Array<{ method: string; url: string }>
+		> = {
+			"repo-a": [],
+			"repo-b": [],
+		};
+		const fetchImplementation = createFetchImplementation((url, init) => {
+			const method = init.method ?? "GET";
+			const repository = url.includes("repo-a") ? "repo-a" : "repo-b";
+
+			requestsByRepository[repository]?.push({ method, url });
+
+			if (url.endsWith("/subscription") && method === "GET") {
+				return new Response(
+					JSON.stringify(createSubscriptionResponse(false, false)),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			if (url.endsWith("/subscription") && method === "PUT") {
+				return new Response("", { status: 200, statusText: "OK" });
+			}
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			[
+				{
+					actions: { ...noChangeActions, archiveAction: "archived" },
+					repository: "repo-a",
+				},
+				{
+					actions: { ...noChangeActions, subscriptionAction: "ignoring" },
+					repository: "repo-b",
+				},
+			],
+			fetchImplementation
+		);
+
+		expect(
+			requestsByRepository["repo-a"].map((request) => request.method)
+		).toEqual(["GET", "PATCH"]);
+		expect(
+			requestsByRepository["repo-a"].some((request) =>
+				request.url.endsWith("/subscription")
+			)
+		).toBe(false);
+		expect(
+			requestsByRepository["repo-b"].map((request) => request.method)
+		).toEqual(["GET", "PUT"]);
+		expect(
+			requestsByRepository["repo-b"].every((request) =>
+				request.url.endsWith("/subscription")
+			)
+		).toBe(true);
+
+		expect(results).toEqual([
+			{
+				archive: {
+					error: null,
+					outcome: "changed",
+					status: 200,
+					statusText: "OK",
+				},
+				ok: true,
+				repository: "repo-a",
+				subscription: null,
+				visibility: null,
+			},
+			{
+				archive: null,
+				ok: true,
+				repository: "repo-b",
+				subscription: {
+					error: null,
+					outcome: "changed",
+					status: 200,
+					statusText: "OK",
+				},
+				visibility: null,
+			},
+		]);
 	});
 });
 
@@ -1386,5 +1527,80 @@ describe("listGitHubWatchedRepositoryFullNames", () => {
 		]);
 		expect(fullNames).toHaveLength(101);
 		expect(fullNames.at(-1)).toBe("owner/repo-100");
+	});
+});
+
+describe("getGitHubOrganizationSupportsInternal", () => {
+	it("returns true for an organization on an enterprise plan", async () => {
+		const fetchImplementation = createFetchImplementation((url) => {
+			expect(url).toBe("https://api.github.com/orgs/acme");
+
+			return new Response(JSON.stringify({ plan: { name: "Enterprise" } }), {
+				status: 200,
+				statusText: "OK",
+			});
+		});
+
+		const supportsInternal = await getGitHubOrganizationSupportsInternal(
+			"token",
+			"acme",
+			fetchImplementation
+		);
+
+		expect(supportsInternal).toBe(true);
+	});
+
+	it("returns false for an organization on a non-enterprise plan", async () => {
+		const fetchImplementation = createFetchImplementation(
+			() =>
+				new Response(JSON.stringify({ plan: { name: "team" } }), {
+					status: 200,
+					statusText: "OK",
+				})
+		);
+
+		const supportsInternal = await getGitHubOrganizationSupportsInternal(
+			"token",
+			"acme",
+			fetchImplementation
+		);
+
+		expect(supportsInternal).toBe(false);
+	});
+
+	it("returns false when the plan field is missing", async () => {
+		const fetchImplementation = createFetchImplementation(
+			() =>
+				new Response(JSON.stringify({}), {
+					status: 200,
+					statusText: "OK",
+				})
+		);
+
+		const supportsInternal = await getGitHubOrganizationSupportsInternal(
+			"token",
+			"acme",
+			fetchImplementation
+		);
+
+		expect(supportsInternal).toBe(false);
+	});
+
+	it("returns false for a personal account with no organization", async () => {
+		const fetchImplementation = createFetchImplementation(
+			() =>
+				new Response("not found", {
+					status: 404,
+					statusText: "Not Found",
+				})
+		);
+
+		const supportsInternal = await getGitHubOrganizationSupportsInternal(
+			"token",
+			"octocat",
+			fetchImplementation
+		);
+
+		expect(supportsInternal).toBe(false);
 	});
 });
