@@ -4,11 +4,17 @@ import {
 	isGitHubContributorStatsPendingError,
 	listGitHubAccounts,
 	listGitHubRepositories,
+	listGitHubWatchedRepositoryFullNames,
+	manageGitHubRepositories,
 	transferGitHubRepositories,
 } from "./github";
 import type {
 	FamePageData,
 	FameSearchInput,
+	ManagePageData,
+	ManageRepositoriesInput,
+	ManageRepositoriesResult,
+	ManageSearchInput,
 	TransferPageData,
 	TransferRepositoriesInput,
 	TransferRepositoriesResult,
@@ -231,6 +237,137 @@ export async function runTransferRepositoriesAction(
 	} catch (error) {
 		return {
 			error: toMessage(error, "Failed to transfer repositories."),
+			results: null,
+			success: false,
+		};
+	}
+}
+
+export async function resolveManagePageData(
+	headers: Headers,
+	search: ManageSearchInput
+): Promise<ManagePageData> {
+	const githubAuth = await getGitHubAccessTokenFromHeaders(headers);
+
+	if (!githubAuth) {
+		return {
+			error: null,
+			organizations: null,
+			repositories: null,
+			watchedRepositories: null,
+		};
+	}
+
+	try {
+		const organizations = await listGitHubAccounts(githubAuth.accessToken);
+		const { account } = search;
+
+		if (!account) {
+			return {
+				error: null,
+				organizations,
+				repositories: null,
+				watchedRepositories: null,
+			};
+		}
+
+		const [repositories, watchedRepositoryFullNames] = await Promise.all([
+			listGitHubRepositories(githubAuth.accessToken, account),
+			listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
+		]);
+		const accountPrefix = `${account.toLowerCase()}/`;
+		const watchedRepositories = watchedRepositoryFullNames
+			.filter((fullName) => fullName.toLowerCase().startsWith(accountPrefix))
+			.map((fullName) => fullName.slice(fullName.indexOf("/") + 1));
+
+		return {
+			error: null,
+			organizations,
+			repositories,
+			watchedRepositories,
+		};
+	} catch (error) {
+		return {
+			error: toMessage(error, "Failed to load repository data."),
+			organizations: null,
+			repositories: null,
+			watchedRepositories: null,
+		};
+	}
+}
+
+export async function runManageRepositoriesAction(
+	headers: Headers,
+	data: ManageRepositoriesInput
+): Promise<ManageRepositoriesResult> {
+	const githubAuth = await getGitHubAccessTokenFromHeaders(headers);
+
+	if (!githubAuth) {
+		return {
+			error: GITHUB_ACCESS_REQUIRED_MESSAGE,
+			results: null,
+			success: false,
+		};
+	}
+
+	if (data.repositories.length === 0) {
+		return {
+			error: "Select at least one repository to update.",
+			results: null,
+			success: false,
+		};
+	}
+
+	if (!data.account) {
+		return {
+			error: "Choose an account.",
+			results: null,
+			success: false,
+		};
+	}
+
+	const archiveAction = data.archiveAction ?? "current";
+	const subscriptionAction = data.subscriptionAction ?? "current";
+	const visibilityAction = data.visibilityAction ?? "current";
+
+	if (
+		archiveAction === "current" &&
+		subscriptionAction === "current" &&
+		visibilityAction === "current"
+	) {
+		return {
+			error: "Choose at least one setting to change.",
+			results: null,
+			success: false,
+		};
+	}
+
+	try {
+		const results = await manageGitHubRepositories(
+			githubAuth.accessToken,
+			data.account,
+			data.repositories,
+			{
+				archiveAction,
+				subscriptionAction,
+				visibilityAction,
+			}
+		);
+		const failedCount = results.filter((result) => !result.ok).length;
+
+		return {
+			error:
+				failedCount > 0
+					? `${failedCount} ${
+							failedCount === 1 ? "repository" : "repositories"
+						} failed to update.`
+					: null,
+			results,
+			success: failedCount === 0,
+		};
+	} catch (error) {
+		return {
+			error: toMessage(error, "Failed to update repositories."),
 			results: null,
 			success: false,
 		};

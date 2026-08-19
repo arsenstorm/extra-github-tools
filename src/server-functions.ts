@@ -2,6 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import type {
 	GitHubAccount,
 	GitHubRepository,
+	ManageRepositoryArchiveAction,
+	ManageRepositoryResult,
+	ManageRepositorySubscriptionAction,
+	ManageRepositoryVisibilityAction,
 	RepoStats,
 	TransferRepositoryArchiveState,
 	TransferRepositoryResult,
@@ -9,6 +13,8 @@ import type {
 } from "./github";
 import {
 	validateFameSearchInput,
+	validateManageRepositoriesInput,
+	validateManageSearchInput,
 	validateTransferRepositoriesInput,
 	validateTransferSearchInput,
 } from "./server-functions.validation";
@@ -53,6 +59,31 @@ export interface FamePageData {
 	statsPending: boolean;
 }
 
+export interface ManageSearchInput {
+	account?: string;
+}
+
+export interface ManagePageData {
+	error: string | null;
+	organizations: GitHubAccount[] | null;
+	repositories: GitHubRepository[] | null;
+	watchedRepositories: string[] | null;
+}
+
+export interface ManageRepositoriesInput {
+	account: string;
+	archiveAction?: ManageRepositoryArchiveAction;
+	repositories: string[];
+	subscriptionAction?: ManageRepositorySubscriptionAction;
+	visibilityAction?: ManageRepositoryVisibilityAction;
+}
+
+export interface ManageRepositoriesResult {
+	error: string | null;
+	results: ManageRepositoryResult[] | null;
+	success: boolean;
+}
+
 export const getTransferPageData = createServerFn({ method: "GET" })
 	.validator(validateTransferSearchInput)
 	.handler(async ({ data }) => {
@@ -82,4 +113,24 @@ export const getFamePageData = createServerFn({ method: "GET" })
 		const { resolveFamePageData } = await import("./server-functions.server");
 
 		return resolveFamePageData(getRequestHeaders(), data);
+	});
+
+export const getManagePageData = createServerFn({ method: "GET" })
+	.validator(validateManageSearchInput)
+	.handler(async ({ data }) => {
+		const { getRequestHeaders } = await import("@tanstack/react-start/server");
+		const { resolveManagePageData } = await import("./server-functions.server");
+
+		return resolveManagePageData(getRequestHeaders(), data);
+	});
+
+export const manageRepositoriesAction = createServerFn({ method: "POST" })
+	.validator(validateManageRepositoriesInput)
+	.handler(async ({ data }): Promise<ManageRepositoriesResult> => {
+		const { getRequestHeaders } = await import("@tanstack/react-start/server");
+		const { runManageRepositoriesAction } = await import(
+			"./server-functions.server"
+		);
+
+		return runManageRepositoriesAction(getRequestHeaders(), data);
 	});

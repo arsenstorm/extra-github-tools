@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type {
 	FameSearchInput,
+	ManageRepositoriesInput,
+	ManageSearchInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
 } from "./server-functions";
 import {
 	validateFameSearchInput,
+	validateManageRepositoriesInput,
+	validateManageSearchInput,
 	validateTransferRepositoriesInput,
 	validateTransferSearchInput,
 } from "./server-functions.validation";
@@ -132,5 +136,116 @@ describe("validateFameSearchInput", () => {
 				repo: 3,
 			} as unknown as FameSearchInput)
 		).toEqual({ org: "org", repo: undefined });
+	});
+});
+
+const asManageInput = (value: unknown): ManageRepositoriesInput =>
+	value as ManageRepositoriesInput;
+
+const emptyManageInput: ManageRepositoriesInput = {
+	account: "",
+	archiveAction: "current",
+	repositories: [],
+	subscriptionAction: "current",
+	visibilityAction: "current",
+};
+
+describe("validateManageRepositoriesInput", () => {
+	it("trims account and dedupes repository names", () => {
+		expect(
+			validateManageRepositoriesInput({
+				account: " acme ",
+				repositories: [" a ", "b", "a", "", "  "],
+			})
+		).toEqual({
+			account: "acme",
+			archiveAction: "current",
+			repositories: ["a", "b"],
+			subscriptionAction: "current",
+			visibilityAction: "current",
+		});
+	});
+
+	it("treats non-string fields as empty", () => {
+		expect(
+			validateManageRepositoriesInput(
+				asManageInput({
+					account: 42,
+					repositories: "nope",
+				})
+			)
+		).toEqual(emptyManageInput);
+	});
+
+	it("drops non-string repository entries", () => {
+		expect(
+			validateManageRepositoriesInput(
+				asManageInput({
+					account: "acme",
+					repositories: ["ok", 1, null, undefined, "also"],
+				})
+			).repositories
+		).toEqual(["ok", "also"]);
+	});
+
+	it("falls back to current for unknown action values", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				archiveAction: "banana",
+				repositories: [],
+				subscriptionAction: "banana",
+				visibilityAction: "banana",
+			})
+		);
+
+		expect(result.archiveAction).toBe("current");
+		expect(result.subscriptionAction).toBe("current");
+		expect(result.visibilityAction).toBe("current");
+	});
+
+	it("keeps valid action values", () => {
+		const result = validateManageRepositoriesInput({
+			account: "acme",
+			archiveAction: "archived",
+			repositories: [],
+			subscriptionAction: "ignoring",
+			visibilityAction: "internal",
+		});
+
+		expect(result.archiveAction).toBe("archived");
+		expect(result.subscriptionAction).toBe("ignoring");
+		expect(result.visibilityAction).toBe("internal");
+	});
+
+	it("does not throw on null or non-object input", () => {
+		expect(validateManageRepositoriesInput(asManageInput(null))).toEqual(
+			emptyManageInput
+		);
+		expect(validateManageRepositoriesInput(asManageInput("string"))).toEqual(
+			emptyManageInput
+		);
+	});
+});
+
+describe("validateManageSearchInput", () => {
+	it("trims and drops blank values", () => {
+		expect(validateManageSearchInput({ account: " acme " })).toEqual({
+			account: "acme",
+		});
+	});
+
+	it("ignores non-string values", () => {
+		expect(
+			validateManageSearchInput({
+				account: 1,
+			} as unknown as ManageSearchInput)
+		).toEqual({ account: undefined });
+	});
+
+	it("does not throw on non-object input", () => {
+		expect(
+			validateManageSearchInput(null as unknown as ManageSearchInput)
+		).toEqual({ account: undefined });
 	});
 });
