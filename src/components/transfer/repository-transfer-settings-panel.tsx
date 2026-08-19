@@ -1,13 +1,7 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { RepositorySelect } from "@/components/repositories/select";
-import {
-	Description,
-	Field,
-	FieldGroup,
-	Fieldset,
-	Label,
-} from "@/components/ui/fieldset";
+import { Field, FieldGroup, Fieldset, Label } from "@/components/ui/fieldset";
 import { Input } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
 import type {
@@ -90,9 +84,6 @@ export function RepositoryTransferSettingsPanel({
 								placeholder="archived-"
 								value={namePrefix}
 							/>
-							<Description>
-								Added before each selected repository name.
-							</Description>
 						</Field>
 						<Field>
 							<Label>Name suffix</Label>
@@ -102,9 +93,6 @@ export function RepositoryTransferSettingsPanel({
 								placeholder="-migrated"
 								value={nameSuffix}
 							/>
-							<Description>
-								Added after each selected repository name.
-							</Description>
 						</Field>
 						<Field>
 							<Label>Visibility after transfer</Label>
@@ -115,9 +103,6 @@ export function RepositoryTransferSettingsPanel({
 								options={REPOSITORY_VISIBILITY_OPTIONS}
 								value={visibility}
 							/>
-							<Description>
-								Applied after GitHub accepts the transfer.
-							</Description>
 						</Field>
 						<Field>
 							<Label>Archive state after transfer</Label>
@@ -128,29 +113,22 @@ export function RepositoryTransferSettingsPanel({
 								options={REPOSITORY_ARCHIVE_STATE_OPTIONS}
 								value={archiveState}
 							/>
-							<Description>
-								Applied to each successfully transferred repository.
-							</Description>
 						</Field>
 					</FieldGroup>
 				</Fieldset>
-				<Text className="mt-4">
-					{hasActiveAdvancedOptions ? (
-						<>
-							Example transfer name: <Strong>{previewRepositoryName}</Strong> to{" "}
-							<Strong>{previewTransferredRepositoryName}</Strong>. Settings:{" "}
-							{getPostTransferSettingsSummary({
-								archiveState,
-								namePrefix,
-								nameSuffix,
-								visibility,
-							})}
-							.
-						</>
-					) : (
-						"Repository names, visibility, and archive state will stay unchanged."
-					)}
-				</Text>
+				{hasActiveAdvancedOptions ? (
+					<Text className="mt-4">
+						Example transfer name: <Strong>{previewRepositoryName}</Strong> to{" "}
+						<Strong>{previewTransferredRepositoryName}</Strong>. Settings:{" "}
+						{getPostTransferSettingsSummary({
+							archiveState,
+							namePrefix,
+							nameSuffix,
+							visibility,
+						})}
+						.
+					</Text>
+				) : null}
 			</div>
 		</details>
 	);

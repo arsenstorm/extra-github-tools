@@ -29,6 +29,15 @@ export function RepositoryPagination({
 		return null;
 	}
 
+	if (totalRepositoryCount <= REPOSITORIES_PER_PAGE_OPTIONS[0]) {
+		return (
+			<Text>
+				<Strong>{totalRepositoryCount}</Strong>{" "}
+				{totalRepositoryCount === 1 ? "repository" : "repositories"}.
+			</Text>
+		);
+	}
+
 	const visibleStart = visibleStartIndex + 1;
 
 	return (
