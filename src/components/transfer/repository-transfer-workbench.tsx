@@ -16,11 +16,9 @@ import type {
 	TransferRepositoryVisibility,
 } from "@/github";
 import { RepositoriesTable } from "./repositories-table";
-import { RepositoryTransferSettingsPanel } from "./repository-transfer-settings-panel";
 import { TransferActionBar } from "./transfer-action-bar";
+import { TransferConfirmDialog } from "./transfer-confirm-dialog";
 import { TransferResultsPanel } from "./transfer-results-panel";
-import { TransferReviewPanel } from "./transfer-review-panel";
-import { getTransferredRepositoryName } from "./utils";
 
 export function RepositoryTransferWorkbench({
 	archiveState,
@@ -117,42 +115,9 @@ export function RepositoryTransferWorkbench({
 		() => new Set(selectedRepositories),
 		[selectedRepositories]
 	);
-	const transferOptions = useMemo(
-		() => ({
-			archiveState,
-			namePrefix,
-			nameSuffix,
-			visibility,
-		}),
-		[archiveState, namePrefix, nameSuffix, visibility]
-	);
-	const isRenamingRepositories = namePrefix.length > 0 || nameSuffix.length > 0;
-	const hasPostTransferSettings =
-		visibility !== "current" || archiveState !== "current";
-	const previewRepositoryName =
-		filteredRepositories[0]?.name ?? repositories[0]?.name ?? "repository";
-	const previewTransferredRepositoryName = getTransferredRepositoryName(
-		previewRepositoryName,
-		transferOptions
-	);
 
 	return (
 		<section className="space-y-6">
-			<RepositoryTransferSettingsPanel
-				archiveState={archiveState}
-				hasPostTransferSettings={hasPostTransferSettings}
-				isRenamingRepositories={isRenamingRepositories}
-				isTransferring={isTransferring}
-				namePrefix={namePrefix}
-				nameSuffix={nameSuffix}
-				onChangeArchiveState={onChangeArchiveState}
-				onChangeNamePrefix={onChangeNamePrefix}
-				onChangeNameSuffix={onChangeNameSuffix}
-				onChangeVisibility={onChangeVisibility}
-				previewRepositoryName={previewRepositoryName}
-				previewTransferredRepositoryName={previewTransferredRepositoryName}
-				visibility={visibility}
-			/>
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<Text>
 					Select repositories from <Strong>{from}</Strong> to transfer to{" "}
@@ -206,26 +171,31 @@ export function RepositoryTransferWorkbench({
 					results={transferResults}
 				/>
 			) : null}
-			{isReviewing ? (
-				<TransferReviewPanel
-					confirmationValue={confirmationValue}
-					from={from}
-					isTransferring={isTransferring}
-					onCancel={onCancelReview}
-					onChangeConfirmationValue={onChangeConfirmationValue}
-					onConfirm={onConfirmTransfer}
-					repositories={repositories}
-					selectedRepositories={selectedRepositories}
-					to={to}
-					transferOptions={transferOptions}
-				/>
-			) : (
-				<TransferActionBar
-					isTransferring={isTransferring}
-					onReviewTransfer={onReviewTransfer}
-					selectedRepositoryCount={selectedRepositories.length}
-				/>
-			)}
+			<TransferActionBar
+				isTransferring={isTransferring}
+				onReviewTransfer={onReviewTransfer}
+				selectedRepositoryCount={selectedRepositories.length}
+			/>
+			<TransferConfirmDialog
+				archiveState={archiveState}
+				confirmationValue={confirmationValue}
+				from={from}
+				isTransferring={isTransferring}
+				namePrefix={namePrefix}
+				nameSuffix={nameSuffix}
+				onCancel={onCancelReview}
+				onChangeArchiveState={onChangeArchiveState}
+				onChangeConfirmationValue={onChangeConfirmationValue}
+				onChangeNamePrefix={onChangeNamePrefix}
+				onChangeNameSuffix={onChangeNameSuffix}
+				onChangeVisibility={onChangeVisibility}
+				onConfirm={onConfirmTransfer}
+				open={isReviewing}
+				repositories={repositories}
+				selectedRepositories={selectedRepositories}
+				to={to}
+				visibility={visibility}
+			/>
 		</section>
 	);
 }
