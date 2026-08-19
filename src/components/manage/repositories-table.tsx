@@ -291,7 +291,7 @@ function PendingEditCell<Value extends string>({
 	value: Value;
 }>) {
 	return (
-		<div className="w-44">
+		<div className="w-44" title={staged ? `was ${previousLabel}` : undefined}>
 			<RepositorySelect<Value>
 				ariaLabel={ariaLabel}
 				className={
@@ -304,11 +304,6 @@ function PendingEditCell<Value extends string>({
 				options={options}
 				value={value}
 			/>
-			{staged ? (
-				<Text className="mt-1 text-amber-700 dark:text-amber-400">
-					was {previousLabel}
-				</Text>
-			) : null}
 		</div>
 	);
 }
