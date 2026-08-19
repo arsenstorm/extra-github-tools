@@ -70,23 +70,23 @@ export async function resolveTransferPageData(
 	}
 
 	try {
-		const organizations = await listGitHubAccounts(githubAuth.accessToken);
-
 		if (!(search.from && search.to)) {
 			return {
 				error: null,
-				organizations,
+				organizations: await listGitHubAccounts(githubAuth.accessToken),
 				repositories: null,
 			};
 		}
 
+		const [organizations, repositories] = await Promise.all([
+			listGitHubAccounts(githubAuth.accessToken),
+			listGitHubRepositories(githubAuth.accessToken, search.from),
+		]);
+
 		return {
 			error: null,
 			organizations,
-			repositories: await listGitHubRepositories(
-				githubAuth.accessToken,
-				search.from
-			),
+			repositories,
 		};
 	} catch (error) {
 		return {
@@ -259,22 +259,23 @@ export async function resolveManagePageData(
 	}
 
 	try {
-		const organizations = await listGitHubAccounts(githubAuth.accessToken);
 		const { account } = search;
 
 		if (!account) {
 			return {
 				error: null,
-				organizations,
+				organizations: await listGitHubAccounts(githubAuth.accessToken),
 				repositories: null,
 				watchedRepositories: null,
 			};
 		}
 
-		const [repositories, watchedRepositoryFullNames] = await Promise.all([
-			listGitHubRepositories(githubAuth.accessToken, account),
-			listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
-		]);
+		const [organizations, repositories, watchedRepositoryFullNames] =
+			await Promise.all([
+				listGitHubAccounts(githubAuth.accessToken),
+				listGitHubRepositories(githubAuth.accessToken, account),
+				listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
+			]);
 		const accountPrefix = `${account.toLowerCase()}/`;
 		const watchedRepositories = watchedRepositoryFullNames
 			.filter((fullName) => fullName.toLowerCase().startsWith(accountPrefix))
