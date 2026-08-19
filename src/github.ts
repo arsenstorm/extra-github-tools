@@ -7,6 +7,7 @@ const MAX_CONTRIBUTOR_STATS_RETRY_DELAY_MS = 5000;
 const DEFAULT_TRANSFER_SETTINGS_ATTEMPTS = 10;
 const DEFAULT_TRANSFER_SETTINGS_DELAY_MS = 2000;
 const GITHUB_LIST_PAGE_SIZE = 100;
+const MAX_PAGINATION_CONCURRENCY = 5;
 const MAX_TRANSFER_CONCURRENCY = 3;
 const MAX_CONTRIBUTOR_PROFILE_CONCURRENCY = 5;
 const CONTRIBUTOR_STATS_PENDING_MESSAGE =
@@ -399,6 +400,26 @@ const createGitHubPaginatedPathname = (
 	return `${pathname}${separator}${paginationParams.toString()}`;
 };
 
+const LAST_PAGE_LINK_PATTERN = /[?&]page=(\d+)[^>]*>;\s*rel="last"/;
+
+const getLastPageFromLinkHeader = (response: Response): number | null => {
+	const linkHeader = response.headers.get("Link");
+
+	if (!linkHeader) {
+		return null;
+	}
+
+	const match = linkHeader.match(LAST_PAGE_LINK_PATTERN);
+
+	if (!match) {
+		return null;
+	}
+
+	const lastPage = Number(match[1]);
+
+	return Number.isInteger(lastPage) && lastPage > 1 ? lastPage : null;
+};
+
 const fetchGitHubPaginatedJson = async <ResponseData>(
 	pathname: string,
 	accessToken: string,
@@ -406,13 +427,56 @@ const fetchGitHubPaginatedJson = async <ResponseData>(
 	firstResponse: Response,
 	fallbackMessage: string
 ): Promise<ResponseData[]> => {
-	const results: ResponseData[] = [];
-	let page = 1;
-	let response = firstResponse;
+	if (!firstResponse.ok) {
+		throw await createGitHubError(firstResponse, fallbackMessage);
+	}
+
+	const firstPageResults = (await firstResponse.json()) as ResponseData[];
+
+	if (firstPageResults.length < GITHUB_LIST_PAGE_SIZE) {
+		return firstPageResults;
+	}
+
+	const lastPage = getLastPageFromLinkHeader(firstResponse);
+
+	if (lastPage) {
+		const remainingPages = Array.from(
+			{ length: lastPage - 1 },
+			(_item, index) => index + 2
+		);
+		const remainingPageResults = await mapWithConcurrency(
+			remainingPages,
+			MAX_PAGINATION_CONCURRENCY,
+			async (pageNumber) => {
+				const response = await fetchGitHubResponse(
+					createGitHubPaginatedPathname(pathname, pageNumber),
+					accessToken,
+					fetchImplementation
+				);
+
+				if (!response.ok) {
+					throw await createGitHubError(response, fallbackMessage);
+				}
+
+				return (await response.json()) as ResponseData[];
+			}
+		);
+
+		return [firstPageResults, ...remainingPageResults].flat();
+	}
+
+	const results = [...firstPageResults];
+	let page = 2;
 
 	for (;;) {
+		// biome-ignore lint/performance/noAwaitInLoops: without a Link header the list length is unknown, so pages are fetched in order until a short page ends it
+		const response = await fetchGitHubResponse(
+			createGitHubPaginatedPathname(pathname, page),
+			accessToken,
+			fetchImplementation
+		);
+
 		if (!response.ok) {
-			// biome-ignore lint/performance/noAwaitInLoops: pages must be fetched in order until a short page ends the list
 			throw await createGitHubError(response, fallbackMessage);
 		}
 
@@ -425,11 +489,6 @@ const fetchGitHubPaginatedJson = async <ResponseData>(
 		}
 
 		page += 1;
-		response = await fetchGitHubResponse(
-			createGitHubPaginatedPathname(pathname, page),
-			accessToken,
-			fetchImplementation
-		);
 	}
 };
 

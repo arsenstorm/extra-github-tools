@@ -180,6 +180,144 @@ describe("listGitHubRepositories", () => {
 			private: true,
 		});
 	});
+
+	it("fetches remaining pages in parallel when a Link header names the last page", async () => {
+		const requestedUrls: string[] = [];
+		const firstPageRepositories = Array.from({ length: 100 }, (_item, index) =>
+			createRepositoryResponse(`repo-${index}`)
+		);
+		const secondPageRepositories = Array.from({ length: 100 }, (_item, index) =>
+			createRepositoryResponse(`page2-repo-${index}`)
+		);
+		const thirdPageRepositories = [createRepositoryResponse("page3-repo-0")];
+		const fetchImplementation = createFetchImplementation((url) => {
+			requestedUrls.push(url);
+			const page = new URL(url).searchParams.get("page");
+
+			if (page === "1") {
+				return new Response(JSON.stringify(firstPageRepositories), {
+					headers: {
+						Link: '<https://api.github.com/orgs/source/repos?page=2&per_page=100>; rel="next", <https://api.github.com/orgs/source/repos?page=3&per_page=100>; rel="last"',
+					},
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (page === "2") {
+				return new Response(JSON.stringify(secondPageRepositories), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			return new Response(JSON.stringify(thirdPageRepositories), {
+				status: 200,
+				statusText: "OK",
+			});
+		});
+
+		const repositories = await listGitHubRepositories(
+			"token",
+			"source",
+			fetchImplementation
+		);
+
+		expect(new Set(requestedUrls)).toEqual(
+			new Set([
+				"https://api.github.com/orgs/source/repos?page=1&per_page=100",
+				"https://api.github.com/orgs/source/repos?page=2&per_page=100",
+				"https://api.github.com/orgs/source/repos?page=3&per_page=100",
+			])
+		);
+		expect(repositories).toHaveLength(201);
+		expect(repositories[0]).toMatchObject({ name: "repo-0" });
+		expect(repositories[100]).toMatchObject({ name: "page2-repo-0" });
+		expect(repositories.at(-1)).toMatchObject({ name: "page3-repo-0" });
+	});
+
+	it("trusts the Link header's last page and does not request beyond it", async () => {
+		const requestedUrls: string[] = [];
+		const firstPageRepositories = Array.from({ length: 100 }, (_item, index) =>
+			createRepositoryResponse(`repo-${index}`)
+		);
+		const secondPageRepositories = Array.from({ length: 100 }, (_item, index) =>
+			createRepositoryResponse(`page2-repo-${index}`)
+		);
+		const fetchImplementation = createFetchImplementation((url) => {
+			requestedUrls.push(url);
+			const page = new URL(url).searchParams.get("page");
+
+			if (page === "1") {
+				return new Response(JSON.stringify(firstPageRepositories), {
+					headers: {
+						Link: '<https://api.github.com/orgs/source/repos?page=2&per_page=100>; rel="last"',
+					},
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			return new Response(JSON.stringify(secondPageRepositories), {
+				status: 200,
+				statusText: "OK",
+			});
+		});
+
+		const repositories = await listGitHubRepositories(
+			"token",
+			"source",
+			fetchImplementation
+		);
+
+		expect(requestedUrls).toEqual([
+			"https://api.github.com/orgs/source/repos?page=1&per_page=100",
+			"https://api.github.com/orgs/source/repos?page=2&per_page=100",
+		]);
+		expect(repositories).toHaveLength(200);
+	});
+
+	it("falls back to sequential fetching when the Link header has no rel=last match", async () => {
+		const requestedUrls: string[] = [];
+		const firstPageRepositories = Array.from({ length: 100 }, (_item, index) =>
+			createRepositoryResponse(`repo-${index}`)
+		);
+		const fetchImplementation = createFetchImplementation((url) => {
+			requestedUrls.push(url);
+			const page = new URL(url).searchParams.get("page");
+
+			if (page === "1") {
+				return new Response(JSON.stringify(firstPageRepositories), {
+					headers: {
+						Link: '<https://api.github.com/orgs/source/repos?page=2&per_page=100>; rel="next"',
+					},
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			return new Response(
+				JSON.stringify([createRepositoryResponse("repo-100")]),
+				{
+					status: 200,
+					statusText: "OK",
+				}
+			);
+		});
+
+		const repositories = await listGitHubRepositories(
+			"token",
+			"source",
+			fetchImplementation
+		);
+
+		expect(requestedUrls).toEqual([
+			"https://api.github.com/orgs/source/repos?page=1&per_page=100",
+			"https://api.github.com/orgs/source/repos?page=2&per_page=100",
+		]);
+		expect(repositories).toHaveLength(101);
+		expect(repositories.at(-1)).toMatchObject({ name: "repo-100" });
+	});
 });
 
 describe("analyzeGitHubRepository", () => {
