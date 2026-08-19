@@ -248,7 +248,7 @@ export function ManagePageContent({
 						onReset={onResetFlow}
 						onSelectAccount={onSelectAccount}
 					/>
-					{account ? (
+					{account && !isLoadingManageData ? (
 						<section className="space-y-6">
 							<ManageSettingsPanel
 								actions={manageActions}
@@ -339,7 +339,7 @@ export function ManagePageContent({
 							)}
 						</section>
 					) : (
-						<ManageStartState />
+						<ManageStartState isLoading={isLoadingManageData} />
 					)}
 				</div>
 			</GitHubAccessGate>
