@@ -5,12 +5,9 @@ import type {
 	ManageRepositoryResult,
 	ManageSettingResult,
 	RepositorySubscriptionState,
-	RepositoryVisibility,
 } from "@/github";
-import type { ManageRepositoryChangeInput } from "@/server-functions";
 import {
 	MANAGE_VISIBILITY_ACTION_OPTIONS,
-	MANAGE_VISIBILITY_STATE_OPTIONS,
 	type ManageRepositoryStatus,
 } from "./types";
 
@@ -19,21 +16,6 @@ export interface ManageResultCounts {
 	failedCount: number;
 	unchangedCount: number;
 }
-
-export interface RepositoryPendingChange {
-	archived?: boolean;
-	subscription?: RepositorySubscriptionState;
-	visibility?: RepositoryVisibility;
-}
-
-export type StagePendingFieldHandler = <
-	Field extends keyof RepositoryPendingChange,
->(
-	repositoryName: string,
-	field: Field,
-	target: RepositoryPendingChange[Field],
-	currentValue: RepositoryPendingChange[Field]
-) => void;
 
 const getSettingResults = (
 	result: ManageRepositoryResult
@@ -160,135 +142,78 @@ export const getRepositorySubscriptionDisplayState = (
 ): RepositorySubscriptionState =>
 	watchedRepositories.has(repositoryName) ? "watching" : "unwatching";
 
-export const withPendingField = <Field extends keyof RepositoryPendingChange>(
-	pendingChange: RepositoryPendingChange | undefined,
-	field: Field,
-	target: RepositoryPendingChange[Field],
-	currentValue: RepositoryPendingChange[Field]
-): RepositoryPendingChange | null => {
-	const next = { ...pendingChange };
-
-	if (target === currentValue) {
-		delete next[field];
-	} else {
-		next[field] = target;
-	}
-
-	return Object.keys(next).length > 0 ? next : null;
-};
-
-export const getBulkPendingChange = (
-	repository: GitHubRepository,
-	pendingChange: RepositoryPendingChange | undefined,
-	actions: ManageRepositoryActions,
-	watchedRepositories: Set<string>
-): RepositoryPendingChange | null => {
-	let nextChange = pendingChange;
-
-	if (actions.archiveAction !== "current") {
-		nextChange =
-			withPendingField(
-				nextChange,
-				"archived",
-				actions.archiveAction === "archived",
-				repository.archived
-			) ?? undefined;
-	}
-
-	if (actions.visibilityAction !== "current") {
-		nextChange =
-			withPendingField(
-				nextChange,
-				"visibility",
-				actions.visibilityAction,
-				repository.visibility
-			) ?? undefined;
-	}
-
-	if (actions.subscriptionAction !== "current") {
-		nextChange =
-			withPendingField(
-				nextChange,
-				"subscription",
-				actions.subscriptionAction,
-				getRepositorySubscriptionDisplayState(
-					repository.name,
-					watchedRepositories
-				)
-			) ?? undefined;
-	}
-
-	return nextChange ?? null;
-};
-
-export const getManageChangeInputs = (
-	pendingChanges: ReadonlyMap<string, RepositoryPendingChange>
-): ManageRepositoryChangeInput[] =>
-	[...pendingChanges.entries()].map(([repository, change]) => {
-		const changeInput: ManageRepositoryChangeInput = { repository };
-
-		if (change.archived !== undefined) {
-			changeInput.archiveAction = change.archived ? "archived" : "unarchived";
-		}
-
-		if (change.subscription) {
-			changeInput.subscriptionAction = change.subscription;
-		}
-
-		if (change.visibility) {
-			changeInput.visibilityAction = change.visibility;
-		}
-
-		return changeInput;
-	});
-
 const SUBSCRIPTION_STATE_LABELS = {
 	ignoring: "ignoring",
 	unwatching: "not watching",
 	watching: "watching",
 } as const;
 
-export const getPendingChangeLines = (
+const getArchiveChangeLine = (
 	repository: GitHubRepository,
-	change: RepositoryPendingChange,
-	watchedRepositories: Set<string>
-): string[] => {
-	const lines: string[] = [];
-
-	if (change.archived !== undefined) {
-		lines.push(
-			`Archived: ${repository.archived ? "yes" : "no"} → ${
-				change.archived ? "yes" : "no"
-			}`
-		);
+	actions: ManageRepositoryActions
+): string | null => {
+	if (actions.archiveAction === "current") {
+		return null;
 	}
 
-	if (change.visibility) {
-		lines.push(`Visibility: ${repository.visibility} → ${change.visibility}`);
+	const targetArchived = actions.archiveAction === "archived";
+
+	if (targetArchived === repository.archived) {
+		return null;
 	}
 
-	if (change.subscription) {
-		const currentState = getRepositorySubscriptionDisplayState(
-			repository.name,
-			watchedRepositories
-		);
-
-		lines.push(
-			`Notifications: ${SUBSCRIPTION_STATE_LABELS[currentState]} → ${
-				SUBSCRIPTION_STATE_LABELS[change.subscription]
-			}`
-		);
-	}
-
-	return lines;
+	return `Archived: ${repository.archived ? "yes" : "no"} → ${
+		targetArchived ? "yes" : "no"
+	}`;
 };
 
-export const getManageVisibilityStateOptions = (
-	supportsInternalVisibility: boolean
-): ReadonlyArray<{ label: string; value: RepositoryVisibility }> =>
-	MANAGE_VISIBILITY_STATE_OPTIONS.filter(
-		(option) => supportsInternalVisibility || option.value !== "internal"
+const getVisibilityChangeLine = (
+	repository: GitHubRepository,
+	actions: ManageRepositoryActions
+): string | null => {
+	if (
+		actions.visibilityAction === "current" ||
+		actions.visibilityAction === repository.visibility
+	) {
+		return null;
+	}
+
+	return `Visibility: ${repository.visibility} → ${actions.visibilityAction}`;
+};
+
+const getSubscriptionChangeLine = (
+	repository: GitHubRepository,
+	actions: ManageRepositoryActions,
+	watchedRepositories: Set<string>
+): string | null => {
+	if (actions.subscriptionAction === "current") {
+		return null;
+	}
+
+	const currentState = getRepositorySubscriptionDisplayState(
+		repository.name,
+		watchedRepositories
 	);
+
+	if (actions.subscriptionAction === currentState) {
+		return null;
+	}
+
+	return `Notifications: ${SUBSCRIPTION_STATE_LABELS[currentState]} → ${
+		SUBSCRIPTION_STATE_LABELS[actions.subscriptionAction]
+	}`;
+};
+
+export const getRepositoryChangeLines = (
+	repository: GitHubRepository,
+	actions: ManageRepositoryActions,
+	watchedRepositories: Set<string>
+): string[] =>
+	[
+		getArchiveChangeLine(repository, actions),
+		getVisibilityChangeLine(repository, actions),
+		getSubscriptionChangeLine(repository, actions, watchedRepositories),
+	].filter((line): line is string => line !== null);
 
 export const getManageVisibilityActionOptions = (
 	supportsInternalVisibility: boolean

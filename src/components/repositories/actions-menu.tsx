@@ -1,4 +1,5 @@
 import { EllipsisVerticalIcon } from "@heroicons/react/16/solid";
+import type React from "react";
 import {
 	Dropdown,
 	DropdownButton,
@@ -8,9 +9,11 @@ import {
 } from "@/components/ui/dropdown";
 
 export function RepositoryActionsMenu({
+	children,
 	htmlUrl,
 	repositoryName,
 }: Readonly<{
+	children?: React.ReactNode;
 	htmlUrl: string;
 	repositoryName: string;
 }>) {
@@ -24,6 +27,7 @@ export function RepositoryActionsMenu({
 				<EllipsisVerticalIcon />
 			</DropdownButton>
 			<DropdownMenu anchor="bottom end">
+				{children}
 				<DropdownItem href={htmlUrl} rel="noopener noreferrer" target="_blank">
 					<DropdownLabel>View on GitHub</DropdownLabel>
 				</DropdownItem>

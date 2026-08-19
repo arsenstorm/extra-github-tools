@@ -2,8 +2,6 @@ import type {
 	ManageRepositoryArchiveAction,
 	ManageRepositorySubscriptionAction,
 	ManageRepositoryVisibilityAction,
-	RepositorySubscriptionState,
-	RepositoryVisibility,
 } from "@/github";
 
 export type ManageRepositoryStatus =
@@ -12,8 +10,6 @@ export type ManageRepositoryStatus =
 	| "pending"
 	| "unchanged"
 	| "updated";
-
-export type ManageArchivedState = "active" | "archived";
 
 export const MANAGE_ARCHIVE_ACTION_OPTIONS = [
 	{
@@ -76,70 +72,3 @@ export const MANAGE_SUBSCRIPTION_ACTION_OPTIONS = [
 	label: string;
 	value: ManageRepositorySubscriptionAction;
 }>;
-
-export const MANAGE_ARCHIVED_STATE_OPTIONS = [
-	{
-		label: "Active",
-		value: "active",
-	},
-	{
-		label: "Archived",
-		value: "archived",
-	},
-] as const satisfies ReadonlyArray<{
-	label: string;
-	value: ManageArchivedState;
-}>;
-
-export const MANAGE_VISIBILITY_STATE_OPTIONS = [
-	{
-		label: "Public",
-		value: "public",
-	},
-	{
-		label: "Private",
-		value: "private",
-	},
-	{
-		label: "Internal",
-		value: "internal",
-	},
-] as const satisfies ReadonlyArray<{
-	label: string;
-	value: RepositoryVisibility;
-}>;
-
-export const MANAGE_SUBSCRIPTION_STATE_OPTIONS = [
-	{
-		label: "Watching",
-		value: "watching",
-	},
-	{
-		label: "Not watching",
-		value: "unwatching",
-	},
-	{
-		label: "Ignoring",
-		value: "ignoring",
-	},
-] as const satisfies ReadonlyArray<{
-	label: string;
-	value: RepositorySubscriptionState;
-}>;
-
-export const MANAGE_ARCHIVED_STATE_LABELS = {
-	active: "Active",
-	archived: "Archived",
-} as const;
-
-export const MANAGE_VISIBILITY_STATE_LABELS = {
-	internal: "Internal",
-	private: "Private",
-	public: "Public",
-} as const;
-
-export const MANAGE_SUBSCRIPTION_STATE_LABELS = {
-	ignoring: "Ignoring",
-	unwatching: "Not watching",
-	watching: "Watching",
-} as const;

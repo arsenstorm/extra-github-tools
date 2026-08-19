@@ -1,5 +1,5 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/16/solid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PageHeading from "@/components/page-heading";
 import { GitHubAccessGate } from "@/components/repositories/gate";
 import {
@@ -12,6 +12,8 @@ import { useRepositoryList } from "@/components/repositories/use-repository-list
 import { Input, InputGroup } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
 import type {
+	GitHubRepository,
+	ManageRepositoryActions,
 	ManageRepositoryArchiveAction,
 	ManageRepositoryResult,
 	ManageRepositorySubscriptionAction,
@@ -24,18 +26,11 @@ import type {
 } from "@/server-functions";
 import { AccountManagePanel } from "./account-manage-panel";
 import { ManageActionBar } from "./manage-action-bar";
-import { ManageConfirmDialog } from "./manage-confirm-dialog";
+import { ManageEditDialog } from "./manage-edit-dialog";
 import { ManageResultsPanel } from "./manage-results-panel";
-import { ManageSettingsPanel } from "./manage-settings-panel";
 import { ManageStartState } from "./manage-start-state";
 import { RepositoriesTable } from "./repositories-table";
-import {
-	getBulkPendingChange,
-	getManageChangeInputs,
-	type RepositoryPendingChange,
-	showManageResultToast,
-	withPendingField,
-} from "./utils";
+import { showManageResultToast } from "./utils";
 
 const MANAGE_CHUNK_SIZE = 10;
 
@@ -78,22 +73,22 @@ export function ManagePageContent({
 	onSelectAccount: (accountHandle: string) => void;
 	pageData: ManagePageData;
 }>) {
-	const [bulkArchiveAction, setBulkArchiveAction] =
+	const [archiveAction, setArchiveAction] =
 		useState<ManageRepositoryArchiveAction>("current");
-	const [bulkSubscriptionAction, setBulkSubscriptionAction] =
+	const [subscriptionAction, setSubscriptionAction] =
 		useState<ManageRepositorySubscriptionAction>("current");
-	const [bulkVisibilityAction, setBulkVisibilityAction] =
+	const [visibilityAction, setVisibilityAction] =
 		useState<ManageRepositoryVisibilityAction>("current");
 	const [confirmationValue, setConfirmationValue] = useState("");
-	const [isConfirming, setIsConfirming] = useState(false);
+	const [editTargets, setEditTargets] = useState<string[] | null>(null);
 	const [isManaging, setIsManaging] = useState(false);
+	const [lastRunActions, setLastRunActions] =
+		useState<ManageRepositoryActions | null>(null);
 	const [manageResults, setManageResults] = useState<
 		ManageRepositoryResult[] | null
 	>(null);
-	const [pendingChanges, setPendingChanges] = useState<
-		Map<string, RepositoryPendingChange>
-	>(new Map());
 	const [pendingRepositories, setPendingRepositories] = useState<string[]>([]);
+	const closingEditTargetsRef = useRef<GitHubRepository[]>([]);
 
 	const repositories = useMemo(
 		() => pageData.repositories ?? [],
@@ -115,6 +110,7 @@ export function ManagePageContent({
 		repositorySort,
 		resetList,
 		selectedRepositories,
+		setSelectedRepositories,
 		toggleRepository,
 		updatePage,
 		updateRepositoriesPerPage,
@@ -122,14 +118,31 @@ export function ManagePageContent({
 		updateSort,
 	} = useRepositoryList(repositories);
 
-	const bulkActions = useMemo(
+	const actions = useMemo<ManageRepositoryActions>(
 		() => ({
-			archiveAction: bulkArchiveAction,
-			subscriptionAction: bulkSubscriptionAction,
-			visibilityAction: bulkVisibilityAction,
+			archiveAction,
+			subscriptionAction,
+			visibilityAction,
 		}),
-		[bulkArchiveAction, bulkSubscriptionAction, bulkVisibilityAction]
+		[archiveAction, subscriptionAction, visibilityAction]
 	);
+	const editTargetRepositories = useMemo(() => {
+		if (!editTargets) {
+			return [];
+		}
+
+		const editTargetSet = new Set(editTargets);
+
+		return repositories.filter((repository) =>
+			editTargetSet.has(repository.name)
+		);
+	}, [editTargets, repositories]);
+
+	if (editTargetRepositories.length > 0) {
+		// Keep the closing dialog readable while it fades out.
+		closingEditTargetsRef.current = editTargetRepositories;
+	}
+
 	const pendingRepositorySet = useMemo(
 		() => new Set(pendingRepositories),
 		[pendingRepositories]
@@ -148,91 +161,79 @@ export function ManagePageContent({
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset local flow state when the selected account changes.
 	useEffect(() => {
-		setBulkArchiveAction("current");
-		setBulkSubscriptionAction("current");
-		setBulkVisibilityAction("current");
+		setArchiveAction("current");
+		setSubscriptionAction("current");
+		setVisibilityAction("current");
 		setConfirmationValue("");
-		setIsConfirming(false);
+		setEditTargets(null);
+		setLastRunActions(null);
 		setManageResults(null);
-		setPendingChanges(new Map());
 		setPendingRepositories([]);
 		resetList();
 	}, [account]);
 
-	const setRepositoryPendingField = <
-		Field extends keyof RepositoryPendingChange,
-	>(
-		repositoryName: string,
-		field: Field,
-		target: RepositoryPendingChange[Field],
-		currentValue: RepositoryPendingChange[Field]
-	): void => {
-		setManageResults(null);
-		setPendingChanges((previous) => {
-			const next = new Map(previous);
-			const updated = withPendingField(
-				next.get(repositoryName),
-				field,
-				target,
-				currentValue
-			);
-
-			if (updated) {
-				next.set(repositoryName, updated);
-			} else {
-				next.delete(repositoryName);
-			}
-
-			return next;
-		});
+	// The three actions and the confirmation reset when the dialog opens, so
+	// closing leaves the dialog contents alone while it fades out.
+	const closeEditDialog = (): void => {
+		setEditTargets(null);
 	};
 
-	const applyBulkActionsToSelection = (): void => {
-		setManageResults(null);
-		setPendingChanges((previous) => {
-			const next = new Map(previous);
-
-			for (const repository of repositories) {
-				if (!selectedRepositorySet.has(repository.name)) {
-					continue;
-				}
-
-				const updated = getBulkPendingChange(
-					repository,
-					next.get(repository.name),
-					bulkActions,
-					watchedRepositorySet
-				);
-
-				if (updated) {
-					next.set(repository.name, updated);
-				} else {
-					next.delete(repository.name);
-				}
-			}
-
-			return next;
-		});
-		setBulkArchiveAction("current");
-		setBulkSubscriptionAction("current");
-		setBulkVisibilityAction("current");
-	};
-
-	const discardPendingChanges = (): void => {
+	const openEditDialog = (repositoryNames: string[]): void => {
+		setArchiveAction("current");
+		setSubscriptionAction("current");
+		setVisibilityAction("current");
 		setConfirmationValue("");
-		setIsConfirming(false);
-		setPendingChanges(new Map());
+		setEditTargets(repositoryNames);
 	};
 
-	const handleManage = async (): Promise<void> => {
-		const changeInputs = getManageChangeInputs(pendingChanges);
+	const retryFailedRepositories = (): void => {
+		const failedRepositories = (manageResults ?? [])
+			.filter((result) => !result.ok)
+			.map((result) => result.repository);
 
-		if (changeInputs.length === 0) {
+		if (failedRepositories.length === 0) {
 			return;
 		}
 
+		setArchiveAction(lastRunActions?.archiveAction ?? "current");
+		setSubscriptionAction(lastRunActions?.subscriptionAction ?? "current");
+		setVisibilityAction(lastRunActions?.visibilityAction ?? "current");
 		setConfirmationValue("");
-		setIsConfirming(false);
+		setEditTargets(failedRepositories);
+	};
+
+	const buildChangeInputs = (): ManageRepositoryChangeInput[] =>
+		(editTargets ?? []).map((repository) => {
+			const changeInput: ManageRepositoryChangeInput = { repository };
+
+			if (archiveAction !== "current") {
+				changeInput.archiveAction = archiveAction;
+			}
+
+			if (subscriptionAction !== "current") {
+				changeInput.subscriptionAction = subscriptionAction;
+			}
+
+			if (visibilityAction !== "current") {
+				changeInput.visibilityAction = visibilityAction;
+			}
+
+			return changeInput;
+		});
+
+	const handleManage = async (): Promise<void> => {
+		const changeInputs = buildChangeInputs();
+		const hasChosenAction =
+			archiveAction !== "current" ||
+			subscriptionAction !== "current" ||
+			visibilityAction !== "current";
+
+		if (changeInputs.length === 0 || !hasChosenAction) {
+			return;
+		}
+
+		setLastRunActions(actions);
+		closeEditDialog();
 		setIsManaging(true);
 		setManageResults(null);
 		setPendingRepositories(changeInputs.map((change) => change.repository));
@@ -265,17 +266,6 @@ export function ManagePageContent({
 			setIsManaging(false);
 		}
 
-		setPendingChanges((previous) => {
-			const next = new Map(previous);
-
-			for (const result of collectedResults) {
-				if (result.ok) {
-					next.delete(result.repository);
-				}
-			}
-
-			return next;
-		});
 		showManageResultToast(collectedResults, runError);
 		await onRunComplete(
 			collectedResults.some((result) =>
@@ -306,20 +296,10 @@ export function ManagePageContent({
 					/>
 					{account && !isLoadingManageData ? (
 						<section className="space-y-6">
-							<ManageSettingsPanel
-								actions={bulkActions}
-								isManaging={isManaging}
-								onApplyToSelection={applyBulkActionsToSelection}
-								onChangeArchiveAction={setBulkArchiveAction}
-								onChangeSubscriptionAction={setBulkSubscriptionAction}
-								onChangeVisibilityAction={setBulkVisibilityAction}
-								selectedRepositoryCount={selectedRepositories.length}
-								supportsInternalVisibility={pageData.supportsInternalVisibility}
-							/>
 							<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 								<Text>
-									Edit repositories in <Strong>{account}</Strong> row by row, or
-									select rows to bulk edit.
+									Select repositories in <Strong>{account}</Strong>, then edit
+									their settings.
 								</Text>
 								<div className="grid gap-3 sm:min-w-lg sm:grid-cols-[minmax(0,1fr)_12rem]">
 									<InputGroup>
@@ -346,15 +326,13 @@ export function ManagePageContent({
 								<RepositoriesTable
 									filteredRepositories={paginatedRepositories}
 									isManaging={isManaging}
-									onStagePendingField={setRepositoryPendingField}
+									onEditRepository={(repositoryName) =>
+										openEditDialog([repositoryName])
+									}
 									onToggle={toggleRepository}
-									pendingChanges={pendingChanges}
 									pendingRepositories={pendingRepositorySet}
 									resultsByRepository={resultsByRepository}
 									selectedRepositories={selectedRepositorySet}
-									supportsInternalVisibility={
-										pageData.supportsInternalVisibility
-									}
 									watchedRepositories={watchedRepositorySet}
 								/>
 								<RepositoryPagination
@@ -371,35 +349,37 @@ export function ManagePageContent({
 							{manageResults ? (
 								<ManageResultsPanel
 									onClearResults={() => setManageResults(null)}
-									onRetryFailed={() => {
-										setConfirmationValue("");
-										setIsConfirming(true);
-									}}
+									onRetryFailed={retryFailedRepositories}
 									results={manageResults}
 								/>
 							) : null}
 							<ManageActionBar
 								isManaging={isManaging}
-								onDiscard={discardPendingChanges}
-								onReviewChanges={() => {
-									setConfirmationValue("");
-									setIsConfirming(true);
-								}}
-								pendingChangeCount={pendingChanges.size}
+								managingRepositoryCount={
+									pendingRepositories.length + (manageResults?.length ?? 0)
+								}
+								onClearSelection={() => setSelectedRepositories([])}
+								onEditSettings={() => openEditDialog(selectedRepositories)}
+								selectedRepositoryCount={selectedRepositories.length}
 							/>
-							<ManageConfirmDialog
+							<ManageEditDialog
 								account={account}
+								actions={actions}
 								confirmationValue={confirmationValue}
 								isManaging={isManaging}
-								onCancel={() => {
-									setConfirmationValue("");
-									setIsConfirming(false);
-								}}
+								onCancel={closeEditDialog}
+								onChangeArchiveAction={setArchiveAction}
 								onChangeConfirmationValue={setConfirmationValue}
+								onChangeSubscriptionAction={setSubscriptionAction}
+								onChangeVisibilityAction={setVisibilityAction}
 								onConfirm={handleManage}
-								open={isConfirming}
-								pendingChanges={pendingChanges}
-								repositories={repositories}
+								open={editTargets !== null}
+								repositories={
+									editTargets === null
+										? closingEditTargetsRef.current
+										: editTargetRepositories
+								}
+								supportsInternalVisibility={pageData.supportsInternalVisibility}
 								watchedRepositories={watchedRepositorySet}
 							/>
 						</section>
