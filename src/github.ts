@@ -13,6 +13,10 @@ const CONTRIBUTOR_STATS_PENDING_MESSAGE =
 	"GitHub is still calculating contributor statistics. Please try again in a moment.";
 const REPOSITORY_OPERATION_IN_PROGRESS_MESSAGE =
 	"previous repository operation is still in progress";
+const DEFAULT_MANAGE_RATE_LIMIT_ATTEMPTS = 5;
+const DEFAULT_MANAGE_RATE_LIMIT_DELAY_MS = 2000;
+const MAX_MANAGE_CONCURRENCY = 3;
+const NO_CHANGE_NEEDED_STATUS_TEXT = "No change needed";
 
 export const TRANSFER_REPOSITORY_ARCHIVE_STATES = [
 	"current",
@@ -23,6 +27,24 @@ export const TRANSFER_REPOSITORY_VISIBILITIES = [
 	"current",
 	"private",
 	"public",
+] as const;
+
+export const MANAGE_REPOSITORY_ARCHIVE_ACTIONS = [
+	"current",
+	"archived",
+	"unarchived",
+] as const;
+export const MANAGE_REPOSITORY_VISIBILITY_ACTIONS = [
+	"current",
+	"public",
+	"private",
+	"internal",
+] as const;
+export const MANAGE_REPOSITORY_SUBSCRIPTION_ACTIONS = [
+	"current",
+	"watching",
+	"unwatching",
+	"ignoring",
 ] as const;
 
 interface GitHubViewerResponse {
@@ -48,6 +70,7 @@ interface GitHubRepositoryResponse {
 	name: string;
 	private: boolean;
 	pushed_at: string | null;
+	visibility?: string;
 }
 
 interface GitHubRepositoryInfoResponse {
@@ -93,6 +116,8 @@ export interface GitHubAccount {
 	id: number;
 }
 
+export type RepositoryVisibility = "internal" | "private" | "public";
+
 export interface GitHubRepository {
 	archived: boolean;
 	fork: boolean;
@@ -102,6 +127,7 @@ export interface GitHubRepository {
 	name: string;
 	private: boolean;
 	pushedAt: string | null;
+	visibility: RepositoryVisibility;
 }
 
 export interface TransferRepositoryResult {
@@ -125,6 +151,46 @@ export interface TransferRepositorySettingsResult {
 	ok: boolean;
 	status: number;
 	statusText: string;
+}
+
+export type ManageRepositoryArchiveAction =
+	(typeof MANAGE_REPOSITORY_ARCHIVE_ACTIONS)[number];
+export type ManageRepositoryVisibilityAction =
+	(typeof MANAGE_REPOSITORY_VISIBILITY_ACTIONS)[number];
+export type ManageRepositorySubscriptionAction =
+	(typeof MANAGE_REPOSITORY_SUBSCRIPTION_ACTIONS)[number];
+export type RepositorySubscriptionState = Exclude<
+	ManageRepositorySubscriptionAction,
+	"current"
+>;
+
+export interface ManageRepositoryActions {
+	archiveAction: ManageRepositoryArchiveAction;
+	subscriptionAction: ManageRepositorySubscriptionAction;
+	visibilityAction: ManageRepositoryVisibilityAction;
+}
+
+export type ManageSettingOutcome = "changed" | "failed" | "unchanged";
+
+export interface ManageSettingResult {
+	error: string | null;
+	outcome: ManageSettingOutcome;
+	status: number;
+	statusText: string;
+}
+
+export interface ManageRepositoryResult {
+	archive: ManageSettingResult | null;
+	ok: boolean;
+	repository: string;
+	subscription: ManageSettingResult | null;
+	visibility: ManageSettingResult | null;
+}
+
+export interface ManageGitHubRepositoriesOptions {
+	maxRateLimitAttempts?: number;
+	rateLimitDelayMs?: number;
+	sleep?: (durationMs: number) => Promise<void>;
 }
 
 export interface ContributorStats {
@@ -180,6 +246,23 @@ export interface TransferGitHubRepositoriesOptions {
 interface GitHubRepositorySettingsRequestBody {
 	archived?: boolean;
 	private?: boolean;
+}
+
+interface ResolvedManageOptions {
+	fetchImplementation: typeof fetch;
+	maxRateLimitAttempts: number;
+	rateLimitDelayMs: number;
+	sleep: (durationMs: number) => Promise<void>;
+}
+
+interface GitHubSubscriptionResponse {
+	ignored: boolean;
+	subscribed: boolean;
+}
+
+interface GitHubManagedRepositoryResponse {
+	archived: boolean;
+	visibility: string;
 }
 
 const sleep = async (durationMs: number): Promise<void> =>
@@ -405,6 +488,21 @@ export async function listGitHubAccounts(
 	];
 }
 
+const toRepositoryVisibility = (
+	visibility: string | undefined,
+	isPrivate: boolean
+): RepositoryVisibility => {
+	if (visibility === "internal") {
+		return "internal";
+	}
+
+	if (visibility === "public" || visibility === "private") {
+		return visibility;
+	}
+
+	return isPrivate ? "private" : "public";
+};
+
 const mapGitHubRepositories = (
 	repositories: GitHubRepositoryResponse[]
 ): GitHubRepository[] =>
@@ -417,6 +515,10 @@ const mapGitHubRepositories = (
 		name: repository.name,
 		private: repository.private,
 		pushedAt: repository.pushed_at,
+		visibility: toRepositoryVisibility(
+			repository.visibility,
+			repository.private
+		),
 	}));
 
 export async function listGitHubRepositories(
@@ -926,4 +1028,453 @@ export async function analyzeGitHubRepository(
 		totalFiles,
 		totalLines,
 	};
+}
+
+const isRateLimitedResponse = (response: Response): boolean => {
+	if (response.status === 429) {
+		return true;
+	}
+
+	return (
+		response.status === 403 &&
+		(response.headers.has("Retry-After") ||
+			response.headers.get("X-RateLimit-Remaining") === "0")
+	);
+};
+
+const fetchWithRateLimitRetry = async (
+	sendRequest: () => Promise<Response>,
+	options: ResolvedManageOptions
+): Promise<Response> => {
+	let response = await sendRequest();
+
+	for (
+		let attempt = 1;
+		attempt < options.maxRateLimitAttempts && isRateLimitedResponse(response);
+		attempt += 1
+	) {
+		// biome-ignore lint/performance/noAwaitInLoops: rate-limit retries are sequential by design
+		await options.sleep(
+			getRetryAfterDelayMs(response, options.rateLimitDelayMs)
+		);
+		response = await sendRequest();
+	}
+
+	return response;
+};
+
+const createUnchangedSettingResult = (): ManageSettingResult => ({
+	error: null,
+	outcome: "unchanged",
+	status: 0,
+	statusText: NO_CHANGE_NEEDED_STATUS_TEXT,
+});
+
+const getSubscriptionStateFromResponse = (
+	subscription: GitHubSubscriptionResponse
+): RepositorySubscriptionState => {
+	if (subscription.ignored) {
+		return "ignoring";
+	}
+
+	return subscription.subscribed ? "watching" : "unwatching";
+};
+
+const sendSubscriptionUpdate = (
+	subscriptionPathname: string,
+	accessToken: string,
+	targetState: RepositorySubscriptionState,
+	fetchImplementation: typeof fetch
+): Promise<Response> => {
+	if (targetState === "unwatching") {
+		return fetchGitHubResponse(
+			subscriptionPathname,
+			accessToken,
+			fetchImplementation,
+			{ method: "DELETE" }
+		);
+	}
+
+	return fetchGitHubResponse(
+		subscriptionPathname,
+		accessToken,
+		fetchImplementation,
+		{
+			body: JSON.stringify({
+				ignored: targetState === "ignoring",
+				subscribed: targetState === "watching",
+			}),
+			headers: {
+				"Content-Type": "application/json",
+			},
+			method: "PUT",
+		}
+	);
+};
+
+const applySubscriptionAction = async (
+	accessToken: string,
+	owner: string,
+	repositoryName: string,
+	targetState: RepositorySubscriptionState,
+	options: ResolvedManageOptions
+): Promise<ManageSettingResult> => {
+	const subscriptionPathname = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}/subscription`;
+
+	try {
+		const currentResponse = await fetchWithRateLimitRetry(
+			() =>
+				fetchGitHubResponse(
+					subscriptionPathname,
+					accessToken,
+					options.fetchImplementation
+				),
+			options
+		);
+
+		let currentState: RepositorySubscriptionState = "unwatching";
+
+		if (currentResponse.status !== 404) {
+			if (!currentResponse.ok) {
+				const error = await createGitHubError(
+					currentResponse,
+					`Failed to load the notification subscription for ${repositoryName}.`
+				);
+
+				return {
+					error: error.message,
+					outcome: "failed",
+					status: currentResponse.status,
+					statusText: currentResponse.statusText,
+				};
+			}
+
+			currentState = getSubscriptionStateFromResponse(
+				(await currentResponse.json()) as GitHubSubscriptionResponse
+			);
+		}
+
+		if (currentState === targetState) {
+			return createUnchangedSettingResult();
+		}
+
+		const updateResponse = await fetchWithRateLimitRetry(
+			() =>
+				sendSubscriptionUpdate(
+					subscriptionPathname,
+					accessToken,
+					targetState,
+					options.fetchImplementation
+				),
+			options
+		);
+
+		if (!updateResponse.ok) {
+			const error = await createGitHubError(
+				updateResponse,
+				`Failed to update notifications for ${repositoryName}.`
+			);
+
+			return {
+				error: error.message,
+				outcome: "failed",
+				status: updateResponse.status,
+				statusText: updateResponse.statusText,
+			};
+		}
+
+		return {
+			error: null,
+			outcome: "changed",
+			status: updateResponse.status,
+			statusText: updateResponse.statusText,
+		};
+	} catch (error) {
+		return {
+			error:
+				error instanceof Error ? error.message : "Notification update failed.",
+			outcome: "failed",
+			status: 0,
+			statusText: "Request failed",
+		};
+	}
+};
+
+interface RepositorySettingsBody {
+	archived?: boolean;
+	visibility?: RepositoryVisibility;
+}
+
+interface ResolvedRepositorySettingsBody {
+	archive: ManageSettingResult | null;
+	body: RepositorySettingsBody;
+	visibility: ManageSettingResult | null;
+}
+
+const createManageFailureResults = (
+	wantsArchiveChange: boolean,
+	wantsVisibilityChange: boolean,
+	failedResult: ManageSettingResult
+): {
+	archive: ManageSettingResult | null;
+	visibility: ManageSettingResult | null;
+} => ({
+	archive: wantsArchiveChange ? failedResult : null,
+	visibility: wantsVisibilityChange ? { ...failedResult } : null,
+});
+
+const resolveRepositorySettingsBody = (
+	actions: ManageRepositoryActions,
+	current: GitHubManagedRepositoryResponse
+): ResolvedRepositorySettingsBody => {
+	const { archiveAction, visibilityAction } = actions;
+	const body: RepositorySettingsBody = {};
+	let archive: ManageSettingResult | null = null;
+	let visibility: ManageSettingResult | null = null;
+
+	if (archiveAction !== "current") {
+		const targetArchived = archiveAction === "archived";
+
+		if (current.archived === targetArchived) {
+			archive = createUnchangedSettingResult();
+		} else {
+			body.archived = targetArchived;
+		}
+	}
+
+	if (visibilityAction !== "current") {
+		if (current.visibility === visibilityAction) {
+			visibility = createUnchangedSettingResult();
+		} else {
+			body.visibility = visibilityAction;
+		}
+	}
+
+	return { archive, body, visibility };
+};
+
+const patchRepositorySettings = async (
+	repositoryPathname: string,
+	accessToken: string,
+	repositoryName: string,
+	body: RepositorySettingsBody,
+	options: ResolvedManageOptions
+): Promise<ManageSettingResult> => {
+	const patchResponse = await fetchWithRateLimitRetry(
+		() =>
+			fetchGitHubResponse(
+				repositoryPathname,
+				accessToken,
+				options.fetchImplementation,
+				{
+					body: JSON.stringify(body),
+					headers: {
+						"Content-Type": "application/json",
+					},
+					method: "PATCH",
+				}
+			),
+		options
+	);
+
+	if (patchResponse.ok) {
+		return {
+			error: null,
+			outcome: "changed",
+			status: patchResponse.status,
+			statusText: patchResponse.statusText,
+		};
+	}
+
+	const error = await createGitHubError(
+		patchResponse,
+		`Failed to update ${repositoryName}.`
+	);
+
+	return {
+		error: error.message,
+		outcome: "failed",
+		status: patchResponse.status,
+		statusText: patchResponse.statusText,
+	};
+};
+
+const applyRepositorySettings = async (
+	accessToken: string,
+	owner: string,
+	repositoryName: string,
+	actions: ManageRepositoryActions,
+	options: ResolvedManageOptions
+): Promise<{
+	archive: ManageSettingResult | null;
+	visibility: ManageSettingResult | null;
+}> => {
+	const { archiveAction, visibilityAction } = actions;
+	const repositoryPathname = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repositoryName)}`;
+	const wantsArchiveChange = archiveAction !== "current";
+	const wantsVisibilityChange = visibilityAction !== "current";
+
+	if (!(wantsArchiveChange || wantsVisibilityChange)) {
+		return { archive: null, visibility: null };
+	}
+
+	try {
+		const currentResponse = await fetchWithRateLimitRetry(
+			() =>
+				fetchGitHubResponse(
+					repositoryPathname,
+					accessToken,
+					options.fetchImplementation
+				),
+			options
+		);
+
+		if (!currentResponse.ok) {
+			const error = await createGitHubError(
+				currentResponse,
+				`Failed to load ${owner}/${repositoryName}.`
+			);
+
+			return createManageFailureResults(
+				wantsArchiveChange,
+				wantsVisibilityChange,
+				{
+					error: error.message,
+					outcome: "failed",
+					status: currentResponse.status,
+					statusText: currentResponse.statusText,
+				}
+			);
+		}
+
+		const current =
+			(await currentResponse.json()) as GitHubManagedRepositoryResponse;
+		const { archive, body, visibility } = resolveRepositorySettingsBody(
+			actions,
+			current
+		);
+
+		if (body.archived === undefined && body.visibility === undefined) {
+			return { archive, visibility };
+		}
+
+		const patchResult = await patchRepositorySettings(
+			repositoryPathname,
+			accessToken,
+			repositoryName,
+			body,
+			options
+		);
+
+		return {
+			archive: body.archived === undefined ? archive : patchResult,
+			visibility:
+				body.visibility === undefined ? visibility : { ...patchResult },
+		};
+	} catch (error) {
+		return createManageFailureResults(
+			wantsArchiveChange,
+			wantsVisibilityChange,
+			{
+				error:
+					error instanceof Error
+						? error.message
+						: "Repository settings update failed.",
+				outcome: "failed",
+				status: 0,
+				statusText: "Request failed",
+			}
+		);
+	}
+};
+
+const manageOneGitHubRepository = async (
+	accessToken: string,
+	owner: string,
+	repositoryName: string,
+	actions: ManageRepositoryActions,
+	options: ResolvedManageOptions
+): Promise<ManageRepositoryResult> => {
+	const { subscriptionAction } = actions;
+	const { archive, visibility } = await applyRepositorySettings(
+		accessToken,
+		owner,
+		repositoryName,
+		actions,
+		options
+	);
+	const subscription =
+		subscriptionAction === "current"
+			? null
+			: await applySubscriptionAction(
+					accessToken,
+					owner,
+					repositoryName,
+					subscriptionAction,
+					options
+				);
+	const settingResults = [archive, subscription, visibility];
+	const ok = !settingResults.some(
+		(settingResult) => settingResult?.outcome === "failed"
+	);
+
+	return {
+		archive,
+		ok,
+		repository: repositoryName,
+		subscription,
+		visibility,
+	};
+};
+
+export async function manageGitHubRepositories(
+	accessToken: string,
+	owner: string,
+	repositories: string[],
+	actions: ManageRepositoryActions,
+	fetchImplementation: typeof fetch = fetch,
+	options: ManageGitHubRepositoriesOptions = {}
+): Promise<ManageRepositoryResult[]> {
+	const resolvedOptions: ResolvedManageOptions = {
+		fetchImplementation,
+		maxRateLimitAttempts:
+			options.maxRateLimitAttempts ?? DEFAULT_MANAGE_RATE_LIMIT_ATTEMPTS,
+		rateLimitDelayMs:
+			options.rateLimitDelayMs ?? DEFAULT_MANAGE_RATE_LIMIT_DELAY_MS,
+		sleep: options.sleep ?? sleep,
+	};
+
+	return await mapWithConcurrency(
+		repositories,
+		MAX_MANAGE_CONCURRENCY,
+		(repositoryName) =>
+			manageOneGitHubRepository(
+				accessToken,
+				owner,
+				repositoryName,
+				actions,
+				resolvedOptions
+			)
+	);
+}
+
+export async function listGitHubWatchedRepositoryFullNames(
+	accessToken: string,
+	fetchImplementation: typeof fetch = fetch
+): Promise<string[]> {
+	const subscriptionsPathname = "/user/subscriptions";
+	const firstResponse = await fetchGitHubResponse(
+		createGitHubPaginatedPathname(subscriptionsPathname, 1),
+		accessToken,
+		fetchImplementation
+	);
+	const repositories = await fetchGitHubPaginatedJson<{ full_name: string }>(
+		subscriptionsPathname,
+		accessToken,
+		fetchImplementation,
+		firstResponse,
+		"Failed to load your watched repositories."
+	);
+
+	return repositories.map((repository) => repository.full_name);
 }

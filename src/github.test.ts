@@ -3,8 +3,12 @@ import {
 	analyzeGitHubRepository,
 	isGitHubContributorStatsPendingError,
 	listGitHubRepositories,
+	listGitHubWatchedRepositoryFullNames,
+	manageGitHubRepositories,
 	transferGitHubRepositories,
 } from "./github";
+
+const MANAGED_REPOSITORY_PATH_PATTERN = /\/repos\/owner\/([^/]+)$/;
 
 const getFetchUrl = (input: Parameters<typeof fetch>[0]): string => {
 	if (typeof input === "string") {
@@ -34,6 +38,17 @@ const createRepositoryResponse = (name: string, owner = "source") => ({
 	name,
 	private: false,
 	pushed_at: "2026-04-21T00:00:00Z",
+	visibility: "public",
+});
+
+const createManagedRepositoryResponse = (
+	archived: boolean,
+	visibility: string
+) => ({ archived, visibility });
+
+const createSubscriptionResponse = (subscribed: boolean, ignored: boolean) => ({
+	ignored,
+	subscribed,
 });
 
 const createRepositoryInfoResponse = () => ({
@@ -699,5 +714,539 @@ describe("transferGitHubRepositories", () => {
 		);
 
 		expect(maxInFlightRequests).toBeLessThanOrEqual(3);
+	});
+});
+
+describe("manageGitHubRepositories", () => {
+	const noChangeActions = {
+		archiveAction: "current",
+		subscriptionAction: "current",
+		visibilityAction: "current",
+	} as const;
+
+	it("archives a repository and leaves other settings untouched", async () => {
+		const requestedMethods: string[] = [];
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			const method = init.method ?? "GET";
+
+			requestedMethods.push(method);
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "private")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			expect(JSON.parse(String(init.body))).toEqual({ archived: true });
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo"],
+			{ ...noChangeActions, archiveAction: "archived" },
+			fetchImplementation
+		);
+
+		expect(requestedMethods).toEqual(["GET", "PATCH"]);
+		expect(results).toEqual([
+			{
+				archive: {
+					error: null,
+					outcome: "changed",
+					status: 200,
+					statusText: "OK",
+				},
+				ok: true,
+				repository: "repo",
+				subscription: null,
+				visibility: null,
+			},
+		]);
+	});
+
+	it("unarchives a repository", async () => {
+		const requestBodies: unknown[] = [];
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			const method = init.method ?? "GET";
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(true, "private")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			requestBodies.push(JSON.parse(String(init.body)));
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo"],
+			{ ...noChangeActions, archiveAction: "unarchived" },
+			fetchImplementation
+		);
+
+		expect(requestBodies).toEqual([{ archived: false }]);
+		expect(results[0]?.archive?.outcome).toBe("changed");
+	});
+
+	it.each(["public", "private", "internal"] as const)(
+		"updates visibility to %s when it differs from the current setting",
+		async (targetVisibility) => {
+			const currentVisibility =
+				targetVisibility === "public" ? "private" : "public";
+			const requestBodies: unknown[] = [];
+			const fetchImplementation = createFetchImplementation((_url, init) => {
+				const method = init.method ?? "GET";
+
+				if (method === "GET") {
+					return new Response(
+						JSON.stringify(
+							createManagedRepositoryResponse(false, currentVisibility)
+						),
+						{ status: 200, statusText: "OK" }
+					);
+				}
+
+				requestBodies.push(JSON.parse(String(init.body)));
+
+				return new Response("", { status: 200, statusText: "OK" });
+			});
+
+			const results = await manageGitHubRepositories(
+				"token",
+				"owner",
+				["repo"],
+				{ ...noChangeActions, visibilityAction: targetVisibility },
+				fetchImplementation
+			);
+
+			expect(requestBodies).toEqual([{ visibility: targetVisibility }]);
+			expect(results[0]?.visibility).toEqual({
+				error: null,
+				outcome: "changed",
+				status: 200,
+				statusText: "OK",
+			});
+		}
+	);
+
+	it("skips the PATCH request when archive and visibility already match", async () => {
+		const requestedMethods: string[] = [];
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			const method = init.method ?? "GET";
+
+			requestedMethods.push(method);
+
+			return new Response(
+				JSON.stringify(createManagedRepositoryResponse(true, "private")),
+				{ status: 200, statusText: "OK" }
+			);
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo"],
+			{
+				archiveAction: "archived",
+				subscriptionAction: "current",
+				visibilityAction: "private",
+			},
+			fetchImplementation
+		);
+
+		expect(requestedMethods).toEqual(["GET"]);
+		expect(results[0]).toEqual({
+			archive: {
+				error: null,
+				outcome: "unchanged",
+				status: 0,
+				statusText: "No change needed",
+			},
+			ok: true,
+			repository: "repo",
+			subscription: null,
+			visibility: {
+				error: null,
+				outcome: "unchanged",
+				status: 0,
+				statusText: "No change needed",
+			},
+		});
+	});
+
+	it("sends a single PATCH request with both archive and visibility changes", async () => {
+		const requestedMethods: string[] = [];
+		const requestBodies: unknown[] = [];
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			const method = init.method ?? "GET";
+
+			requestedMethods.push(method);
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			requestBodies.push(JSON.parse(String(init.body)));
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo"],
+			{
+				archiveAction: "archived",
+				subscriptionAction: "current",
+				visibilityAction: "private",
+			},
+			fetchImplementation
+		);
+
+		expect(
+			requestedMethods.filter((method) => method === "PATCH")
+		).toHaveLength(1);
+		expect(requestBodies).toEqual([{ archived: true, visibility: "private" }]);
+		expect(results[0]?.ok).toBe(true);
+		expect(results[0]?.archive?.outcome).toBe("changed");
+		expect(results[0]?.visibility?.outcome).toBe("changed");
+	});
+
+	describe("notification subscription updates", () => {
+		it("watches a repository that has no existing subscription", async () => {
+			const methods: string[] = [];
+			const requestBodies: unknown[] = [];
+			const fetchImplementation = createFetchImplementation((url, init) => {
+				const method = init.method ?? "GET";
+
+				methods.push(method);
+
+				if (url.endsWith("/subscription") && method === "GET") {
+					return new Response("not found", {
+						status: 404,
+						statusText: "Not Found",
+					});
+				}
+
+				requestBodies.push(JSON.parse(String(init.body)));
+
+				return new Response("", { status: 200, statusText: "OK" });
+			});
+
+			const results = await manageGitHubRepositories(
+				"token",
+				"owner",
+				["repo"],
+				{ ...noChangeActions, subscriptionAction: "watching" },
+				fetchImplementation
+			);
+
+			expect(methods).toEqual(["GET", "PUT"]);
+			expect(requestBodies).toEqual([{ ignored: false, subscribed: true }]);
+			expect(results[0]?.subscription).toEqual({
+				error: null,
+				outcome: "changed",
+				status: 200,
+				statusText: "OK",
+			});
+		});
+
+		it("ignores a watched repository", async () => {
+			const requestBodies: unknown[] = [];
+			const fetchImplementation = createFetchImplementation((url, init) => {
+				const method = init.method ?? "GET";
+
+				if (url.endsWith("/subscription") && method === "GET") {
+					return new Response(
+						JSON.stringify(createSubscriptionResponse(true, false)),
+						{ status: 200, statusText: "OK" }
+					);
+				}
+
+				requestBodies.push(JSON.parse(String(init.body)));
+
+				return new Response("", { status: 200, statusText: "OK" });
+			});
+
+			const results = await manageGitHubRepositories(
+				"token",
+				"owner",
+				["repo"],
+				{ ...noChangeActions, subscriptionAction: "ignoring" },
+				fetchImplementation
+			);
+
+			expect(requestBodies).toEqual([{ ignored: true, subscribed: false }]);
+			expect(results[0]?.subscription?.outcome).toBe("changed");
+		});
+
+		it("unwatches a repository by deleting the subscription", async () => {
+			const methods: string[] = [];
+			const fetchImplementation = createFetchImplementation((url, init) => {
+				const method = init.method ?? "GET";
+
+				methods.push(method);
+
+				if (url.endsWith("/subscription") && method === "GET") {
+					return new Response(
+						JSON.stringify(createSubscriptionResponse(true, false)),
+						{ status: 200, statusText: "OK" }
+					);
+				}
+
+				return new Response(null, { status: 204, statusText: "No Content" });
+			});
+
+			const results = await manageGitHubRepositories(
+				"token",
+				"owner",
+				["repo"],
+				{ ...noChangeActions, subscriptionAction: "unwatching" },
+				fetchImplementation
+			);
+
+			expect(methods).toEqual(["GET", "DELETE"]);
+			expect(results[0]?.subscription).toEqual({
+				error: null,
+				outcome: "changed",
+				status: 204,
+				statusText: "No Content",
+			});
+		});
+
+		it("skips the update when the subscription already matches the target state", async () => {
+			const methods: string[] = [];
+			const fetchImplementation = createFetchImplementation((_url, init) => {
+				const method = init.method ?? "GET";
+
+				methods.push(method);
+
+				return new Response(
+					JSON.stringify(createSubscriptionResponse(true, false)),
+					{ status: 200, statusText: "OK" }
+				);
+			});
+
+			const results = await manageGitHubRepositories(
+				"token",
+				"owner",
+				["repo"],
+				{ ...noChangeActions, subscriptionAction: "watching" },
+				fetchImplementation
+			);
+
+			expect(methods).toEqual(["GET"]);
+			expect(results[0]?.subscription).toEqual({
+				error: null,
+				outcome: "unchanged",
+				status: 0,
+				statusText: "No change needed",
+			});
+		});
+	});
+
+	it("retries a PATCH request after a rate-limited response", async () => {
+		const sleepDurations: number[] = [];
+		let patchAttempts = 0;
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			const method = init.method ?? "GET";
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			patchAttempts += 1;
+
+			if (patchAttempts === 1) {
+				return new Response("rate limited", {
+					headers: {
+						"Retry-After": "1",
+						"X-RateLimit-Remaining": "0",
+					},
+					status: 403,
+					statusText: "Forbidden",
+				});
+			}
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo"],
+			{ ...noChangeActions, archiveAction: "archived" },
+			fetchImplementation,
+			{
+				sleep: (durationMs) => {
+					sleepDurations.push(durationMs);
+					return Promise.resolve();
+				},
+			}
+		);
+
+		expect(patchAttempts).toBe(2);
+		expect(sleepDurations).toEqual([1000]);
+		expect(results[0]?.archive?.outcome).toBe("changed");
+	});
+
+	it("isolates a failure to one repository while preserving result order", async () => {
+		const patchAttemptsByRepository: Record<string, number> = {};
+		const fetchImplementation = createFetchImplementation((url, init) => {
+			const method = init.method ?? "GET";
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			const repositoryMatch = url.match(MANAGED_REPOSITORY_PATH_PATTERN);
+			const repository = repositoryMatch?.[1] ?? "unknown";
+
+			patchAttemptsByRepository[repository] =
+				(patchAttemptsByRepository[repository] ?? 0) + 1;
+
+			if (repository === "repo-b") {
+				return new Response(
+					"you do not have permission to modify this repository",
+					{ status: 403, statusText: "Forbidden" }
+				);
+			}
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo-a", "repo-b", "repo-c"],
+			{ ...noChangeActions, archiveAction: "archived" },
+			fetchImplementation,
+			{ sleep: () => Promise.resolve() }
+		);
+
+		expect(results.map((result) => result.repository)).toEqual([
+			"repo-a",
+			"repo-b",
+			"repo-c",
+		]);
+		expect(patchAttemptsByRepository["repo-b"]).toBe(1);
+		expect(results[0]?.ok).toBe(true);
+		expect(results[1]?.ok).toBe(false);
+		expect(results[1]?.archive?.outcome).toBe("failed");
+		expect(results[1]?.archive?.error).toContain(
+			"you do not have permission to modify this repository"
+		);
+		expect(results[2]?.ok).toBe(true);
+	});
+
+	it("only sends requests for the repositories that were listed", async () => {
+		const requestedUrls: string[] = [];
+		const fetchImplementation = createFetchImplementation((url, init) => {
+			requestedUrls.push(url);
+
+			const method = init.method ?? "GET";
+
+			if (method === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(false, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+		await manageGitHubRepositories(
+			"token",
+			"owner",
+			["repo-one", "repo-two"],
+			{ ...noChangeActions, archiveAction: "archived" },
+			fetchImplementation
+		);
+
+		expect(requestedUrls.length).toBeGreaterThan(0);
+
+		for (const url of requestedUrls) {
+			expect(url.includes("repo-one") || url.includes("repo-two")).toBe(true);
+		}
+	});
+});
+
+describe("listGitHubWatchedRepositoryFullNames", () => {
+	it("returns the full names of watched repositories", async () => {
+		const fetchImplementation = createFetchImplementation((url) => {
+			expect(url).toBe(
+				"https://api.github.com/user/subscriptions?page=1&per_page=100"
+			);
+
+			return new Response(
+				JSON.stringify([
+					{ full_name: "owner/repo-one" },
+					{ full_name: "owner/repo-two" },
+				]),
+				{ status: 200, statusText: "OK" }
+			);
+		});
+
+		const fullNames = await listGitHubWatchedRepositoryFullNames(
+			"token",
+			fetchImplementation
+		);
+
+		expect(fullNames).toEqual(["owner/repo-one", "owner/repo-two"]);
+	});
+
+	it("paginates when the first page is full", async () => {
+		const requestedUrls: string[] = [];
+		const firstPageRepositories = Array.from(
+			{ length: 100 },
+			(_item, index) => ({
+				full_name: `owner/repo-${index}`,
+			})
+		);
+		const fetchImplementation = createFetchImplementation((url) => {
+			requestedUrls.push(url);
+
+			const page = new URL(url).searchParams.get("page");
+
+			return new Response(
+				JSON.stringify(
+					page === "1"
+						? firstPageRepositories
+						: [{ full_name: "owner/repo-100" }]
+				),
+				{ status: 200, statusText: "OK" }
+			);
+		});
+
+		const fullNames = await listGitHubWatchedRepositoryFullNames(
+			"token",
+			fetchImplementation
+		);
+
+		expect(requestedUrls).toEqual([
+			"https://api.github.com/user/subscriptions?page=1&per_page=100",
+			"https://api.github.com/user/subscriptions?page=2&per_page=100",
+		]);
+		expect(fullNames).toHaveLength(101);
+		expect(fullNames.at(-1)).toBe("owner/repo-100");
 	});
 });
