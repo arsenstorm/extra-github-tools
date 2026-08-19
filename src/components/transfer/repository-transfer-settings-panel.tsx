@@ -1,5 +1,6 @@
 import { ChevronDown } from "lucide-react";
 import { useState } from "react";
+import { RepositorySelect } from "@/components/repositories/select";
 import {
 	Description,
 	Field,
@@ -13,7 +14,6 @@ import type {
 	TransferRepositoryArchiveState,
 	TransferRepositoryVisibility,
 } from "@/github";
-import { RepositoryTransferSelect } from "./repository-transfer-select";
 import {
 	REPOSITORY_ARCHIVE_STATE_OPTIONS,
 	REPOSITORY_VISIBILITY_OPTIONS,
@@ -108,7 +108,7 @@ export function RepositoryTransferSettingsPanel({
 						</Field>
 						<Field>
 							<Label>Visibility after transfer</Label>
-							<RepositoryTransferSelect<TransferRepositoryVisibility>
+							<RepositorySelect<TransferRepositoryVisibility>
 								ariaLabel="Visibility after transfer"
 								disabled={isTransferring}
 								onChange={onChangeVisibility}
@@ -121,7 +121,7 @@ export function RepositoryTransferSettingsPanel({
 						</Field>
 						<Field>
 							<Label>Archive state after transfer</Label>
-							<RepositoryTransferSelect<TransferRepositoryArchiveState>
+							<RepositorySelect<TransferRepositoryArchiveState>
 								ariaLabel="Archive state after transfer"
 								disabled={isTransferring}
 								onChange={onChangeArchiveState}

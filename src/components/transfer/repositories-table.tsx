@@ -1,5 +1,6 @@
 import { Checkbox } from "@headlessui/react";
 import { type KeyboardEvent, useRef } from "react";
+import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
 import {
 	Table,
 	TableBody,
@@ -11,7 +12,7 @@ import {
 import { Strong, Text, TextLink } from "@/components/ui/text";
 import type { GitHubRepository, TransferRepositoryResult } from "@/github";
 import type { RepositoryStatus } from "./types";
-import { formatRepositoryPushedAt, getRepositoryStatus } from "./utils";
+import { getRepositoryStatus } from "./utils";
 
 export function RepositoriesTable({
 	filteredRepositories,

@@ -4,7 +4,7 @@ import { Strong, Text } from "@/components/ui/text";
 import {
 	REPOSITORIES_PER_PAGE_OPTIONS,
 	type RepositoriesPerPage,
-} from "./types";
+} from "./list-types";
 
 export function RepositoryPagination({
 	currentPage,

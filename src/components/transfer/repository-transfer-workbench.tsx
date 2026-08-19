@@ -1,5 +1,12 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
+import {
+	REPOSITORY_SORT_OPTIONS,
+	type RepositoriesPerPage,
+	type RepositorySort,
+} from "@/components/repositories/list-types";
+import { RepositoryPagination } from "@/components/repositories/pagination";
+import { RepositorySelect } from "@/components/repositories/select";
 import { Input, InputGroup } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
 import type {
@@ -9,17 +16,10 @@ import type {
 	TransferRepositoryVisibility,
 } from "@/github";
 import { RepositoriesTable } from "./repositories-table";
-import { RepositoryPagination } from "./repository-pagination";
-import { RepositoryTransferSelect } from "./repository-transfer-select";
 import { RepositoryTransferSettingsPanel } from "./repository-transfer-settings-panel";
 import { TransferActionBar } from "./transfer-action-bar";
 import { TransferResultsPanel } from "./transfer-results-panel";
 import { TransferReviewPanel } from "./transfer-review-panel";
-import {
-	REPOSITORY_SORT_OPTIONS,
-	type RepositoriesPerPage,
-	type RepositorySort,
-} from "./types";
 import { getTransferredRepositoryName } from "./utils";
 
 export function RepositoryTransferWorkbench({
@@ -169,7 +169,7 @@ export function RepositoryTransferWorkbench({
 							value={repositorySearch}
 						/>
 					</InputGroup>
-					<RepositoryTransferSelect<RepositorySort>
+					<RepositorySelect<RepositorySort>
 						ariaLabel="Sort repositories"
 						className="mt-0"
 						disabled={isTransferring}

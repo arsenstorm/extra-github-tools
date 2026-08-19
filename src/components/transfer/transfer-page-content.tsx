@@ -1,5 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import PageHeading from "@/components/page-heading";
+import { GitHubAccessGate } from "@/components/repositories/gate";
+import {
+	DEFAULT_REPOSITORIES_PER_PAGE,
+	type RepositoriesPerPage,
+	type RepositorySort,
+} from "@/components/repositories/list-types";
+import {
+	clampRepositoryPage,
+	getRepositoryPageCount,
+	getSelectedRepositoryNames,
+	sortRepositories,
+} from "@/components/repositories/list-utils";
 import type {
 	TransferRepositoryArchiveState,
 	TransferRepositoryResult,
@@ -11,20 +23,8 @@ import type {
 } from "@/server-functions";
 import { AccountTransferPanel } from "./account-transfer-panel";
 import { RepositoryTransferWorkbench } from "./repository-transfer-workbench";
-import { TransferGate } from "./transfer-gate";
 import { TransferStartState } from "./transfer-start-state";
-import {
-	DEFAULT_REPOSITORIES_PER_PAGE,
-	type RepositoriesPerPage,
-	type RepositorySort,
-	type RepositoryTransferOptions,
-} from "./types";
-import {
-	clampRepositoryPage,
-	getRepositoryPageCount,
-	getSelectedRepositoryNames,
-	sortRepositories,
-} from "./utils";
+import type { RepositoryTransferOptions } from "./types";
 
 export function TransferPageContent({
 	from,
@@ -293,7 +293,10 @@ export function TransferPageContent({
 				description="Move your repositories in bulk between organizations and personal accounts."
 				title="Bulk Transfer Repositories"
 			/>
-			<TransferGate hasGitHubAccess={hasGitHubAccess} isSignedIn={isSignedIn}>
+			<GitHubAccessGate
+				hasGitHubAccess={hasGitHubAccess}
+				isSignedIn={isSignedIn}
+			>
 				<div className="space-y-8">
 					<AccountTransferPanel
 						accounts={pageData.organizations}
@@ -354,7 +357,7 @@ export function TransferPageContent({
 						<TransferStartState from={from} to={to} />
 					)}
 				</div>
-			</TransferGate>
+			</GitHubAccessGate>
 		</div>
 	);
 }

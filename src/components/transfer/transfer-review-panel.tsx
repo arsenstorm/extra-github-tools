@@ -1,13 +1,11 @@
 import { CircleAlert } from "lucide-react";
+import { CONFIRMATION_REQUIRED_REPOSITORY_COUNT } from "@/components/repositories/list-types";
 import { Button } from "@/components/ui/button";
 import { Description, Field, Label } from "@/components/ui/fieldset";
 import { Input } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
 import type { GitHubRepository } from "@/github";
-import {
-	CONFIRMATION_REQUIRED_REPOSITORY_COUNT,
-	type RepositoryTransferOptions,
-} from "./types";
+import type { RepositoryTransferOptions } from "./types";
 import {
 	getPostTransferSettingsSummary,
 	getTransferredRepositoryName,

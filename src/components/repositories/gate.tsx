@@ -1,7 +1,9 @@
 import RequireSignIn from "@/components/require-sign-in";
-import { getGitHubAccessRefreshDescription } from "./utils";
 
-export function TransferGate({
+const getGitHubAccessRefreshDescription = (): string =>
+	"Your session is active, but GitHub access is unavailable. Sign in with GitHub again to continue.";
+
+export function GitHubAccessGate({
 	children,
 	hasGitHubAccess,
 	isSignedIn,
