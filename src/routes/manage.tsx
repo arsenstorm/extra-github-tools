@@ -77,7 +77,7 @@ function ManageRoute() {
 			hasGitHubAccess={Boolean(appSession.github?.hasAccessToken)}
 			isLoadingManageData={isLoadingManageData}
 			isSignedIn={Boolean(appSession.session)}
-			onManageChunk={async (repositories, actions) => {
+			onManageChunk={async (changes) => {
 				if (!search.account) {
 					return {
 						error: "Choose an account.",
@@ -89,10 +89,7 @@ function ManageRoute() {
 				return await manageRepositories({
 					data: {
 						account: search.account,
-						archiveAction: actions.archiveAction,
-						repositories,
-						subscriptionAction: actions.subscriptionAction,
-						visibilityAction: actions.visibilityAction,
+						changes,
 					},
 				});
 			}}

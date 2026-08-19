@@ -12,7 +12,6 @@ import { useRepositoryList } from "@/components/repositories/use-repository-list
 import { Input, InputGroup } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
 import type {
-	ManageRepositoryActions,
 	ManageRepositoryArchiveAction,
 	ManageRepositoryResult,
 	ManageRepositorySubscriptionAction,
@@ -21,29 +20,36 @@ import type {
 import type {
 	ManagePageData,
 	ManageRepositoriesResult,
+	ManageRepositoryChangeInput,
 } from "@/server-functions";
 import { AccountManagePanel } from "./account-manage-panel";
 import { ManageActionBar } from "./manage-action-bar";
+import { ManageConfirmDialog } from "./manage-confirm-dialog";
 import { ManageResultsPanel } from "./manage-results-panel";
-import { ManageReviewPanel } from "./manage-review-panel";
 import { ManageSettingsPanel } from "./manage-settings-panel";
 import { ManageStartState } from "./manage-start-state";
 import { RepositoriesTable } from "./repositories-table";
-import { hasManageAction, showManageResultToast } from "./utils";
+import {
+	getBulkPendingChange,
+	getManageChangeInputs,
+	type RepositoryPendingChange,
+	showManageResultToast,
+	withPendingField,
+} from "./utils";
 
 const MANAGE_CHUNK_SIZE = 10;
 
-const chunkRepositoryNames = (repositoryNames: string[]): string[][] => {
-	const chunks: string[][] = [];
+const chunkManageChanges = (
+	changes: ManageRepositoryChangeInput[]
+): ManageRepositoryChangeInput[][] => {
+	const chunks: ManageRepositoryChangeInput[][] = [];
 
 	for (
 		let startIndex = 0;
-		startIndex < repositoryNames.length;
+		startIndex < changes.length;
 		startIndex += MANAGE_CHUNK_SIZE
 	) {
-		chunks.push(
-			repositoryNames.slice(startIndex, startIndex + MANAGE_CHUNK_SIZE)
-		);
+		chunks.push(changes.slice(startIndex, startIndex + MANAGE_CHUNK_SIZE));
 	}
 
 	return chunks;
@@ -65,27 +71,29 @@ export function ManagePageContent({
 	isLoadingManageData: boolean;
 	isSignedIn: boolean;
 	onManageChunk: (
-		repositoryNames: string[],
-		actions: ManageRepositoryActions
+		changes: ManageRepositoryChangeInput[]
 	) => Promise<ManageRepositoriesResult>;
 	onResetFlow: () => void;
 	onRunComplete: (didChangeAnything: boolean) => Promise<void>;
 	onSelectAccount: (accountHandle: string) => void;
 	pageData: ManagePageData;
 }>) {
-	const [archiveAction, setArchiveAction] =
+	const [bulkArchiveAction, setBulkArchiveAction] =
 		useState<ManageRepositoryArchiveAction>("current");
+	const [bulkSubscriptionAction, setBulkSubscriptionAction] =
+		useState<ManageRepositorySubscriptionAction>("current");
+	const [bulkVisibilityAction, setBulkVisibilityAction] =
+		useState<ManageRepositoryVisibilityAction>("current");
 	const [confirmationValue, setConfirmationValue] = useState("");
+	const [isConfirming, setIsConfirming] = useState(false);
 	const [isManaging, setIsManaging] = useState(false);
-	const [isReviewing, setIsReviewing] = useState(false);
 	const [manageResults, setManageResults] = useState<
 		ManageRepositoryResult[] | null
 	>(null);
+	const [pendingChanges, setPendingChanges] = useState<
+		Map<string, RepositoryPendingChange>
+	>(new Map());
 	const [pendingRepositories, setPendingRepositories] = useState<string[]>([]);
-	const [subscriptionAction, setSubscriptionAction] =
-		useState<ManageRepositorySubscriptionAction>("current");
-	const [visibilityAction, setVisibilityAction] =
-		useState<ManageRepositoryVisibilityAction>("current");
 
 	const repositories = useMemo(
 		() => pageData.repositories ?? [],
@@ -107,7 +115,6 @@ export function ManagePageContent({
 		repositorySort,
 		resetList,
 		selectedRepositories,
-		setSelectedRepositories,
 		toggleRepository,
 		updatePage,
 		updateRepositoriesPerPage,
@@ -115,13 +122,13 @@ export function ManagePageContent({
 		updateSort,
 	} = useRepositoryList(repositories);
 
-	const manageActions = useMemo<ManageRepositoryActions>(
+	const bulkActions = useMemo(
 		() => ({
-			archiveAction,
-			subscriptionAction,
-			visibilityAction,
+			archiveAction: bulkArchiveAction,
+			subscriptionAction: bulkSubscriptionAction,
+			visibilityAction: bulkVisibilityAction,
 		}),
-		[archiveAction, subscriptionAction, visibilityAction]
+		[bulkArchiveAction, bulkSubscriptionAction, bulkVisibilityAction]
 	);
 	const pendingRepositorySet = useMemo(
 		() => new Set(pendingRepositories),
@@ -138,52 +145,119 @@ export function ManagePageContent({
 			),
 		[manageResults]
 	);
-	const hasAction = hasManageAction(manageActions);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset local flow state when the selected account changes.
 	useEffect(() => {
-		setArchiveAction("current");
+		setBulkArchiveAction("current");
+		setBulkSubscriptionAction("current");
+		setBulkVisibilityAction("current");
 		setConfirmationValue("");
-		setIsReviewing(false);
+		setIsConfirming(false);
 		setManageResults(null);
+		setPendingChanges(new Map());
 		setPendingRepositories([]);
-		setSubscriptionAction("current");
-		setVisibilityAction("current");
 		resetList();
 	}, [account]);
 
-	const handleToggleRepository = (
+	const setRepositoryPendingField = <
+		Field extends keyof RepositoryPendingChange,
+	>(
 		repositoryName: string,
-		shouldSelectRange = false
+		field: Field,
+		target: RepositoryPendingChange[Field],
+		currentValue: RepositoryPendingChange[Field]
 	): void => {
-		setConfirmationValue("");
-		setIsReviewing(false);
 		setManageResults(null);
-		toggleRepository(repositoryName, shouldSelectRange);
+		setPendingChanges((previous) => {
+			const next = new Map(previous);
+			const updated = withPendingField(
+				next.get(repositoryName),
+				field,
+				target,
+				currentValue
+			);
+
+			if (updated) {
+				next.set(repositoryName, updated);
+			} else {
+				next.delete(repositoryName);
+			}
+
+			return next;
+		});
+	};
+
+	const applyBulkActionsToSelection = (): void => {
+		setManageResults(null);
+		setPendingChanges((previous) => {
+			const next = new Map(previous);
+
+			for (const repository of repositories) {
+				if (!selectedRepositorySet.has(repository.name)) {
+					continue;
+				}
+
+				const updated = getBulkPendingChange(
+					repository,
+					next.get(repository.name),
+					bulkActions,
+					watchedRepositorySet
+				);
+
+				if (updated) {
+					next.set(repository.name, updated);
+				} else {
+					next.delete(repository.name);
+				}
+			}
+
+			return next;
+		});
+		setBulkArchiveAction("current");
+		setBulkSubscriptionAction("current");
+		setBulkVisibilityAction("current");
+	};
+
+	const discardPendingChanges = (): void => {
+		setConfirmationValue("");
+		setIsConfirming(false);
+		setPendingChanges(new Map());
 	};
 
 	const handleManage = async (): Promise<void> => {
+		const changeInputs = getManageChangeInputs(pendingChanges);
+
+		if (changeInputs.length === 0) {
+			return;
+		}
+
+		setConfirmationValue("");
+		setIsConfirming(false);
 		setIsManaging(true);
 		setManageResults(null);
-		setPendingRepositories(selectedRepositories);
+		setPendingRepositories(changeInputs.map((change) => change.repository));
 
 		const collectedResults: ManageRepositoryResult[] = [];
 		let runError: string | null = null;
 
 		try {
-			for (const chunk of chunkRepositoryNames(selectedRepositories)) {
+			for (const chunk of chunkManageChanges(changeInputs)) {
 				// biome-ignore lint/performance/noAwaitInLoops: chunks run sequentially to stay inside Workers subrequest limits
-				const chunkResult = await onManageChunk(chunk, manageActions);
+				const chunkResult = await onManageChunk(chunk);
 
 				if (!chunkResult.results) {
 					runError = chunkResult.error ?? "Failed to update repositories.";
 					break;
 				}
 
+				const chunkRepositories = new Set(
+					chunk.map((change) => change.repository)
+				);
+
 				collectedResults.push(...chunkResult.results);
 				setManageResults([...collectedResults]);
 				setPendingRepositories((previousPending) =>
-					previousPending.filter((name) => !chunk.includes(name))
+					previousPending.filter((name) => !chunkRepositories.has(name))
 				);
 			}
 		} finally {
@@ -191,21 +265,17 @@ export function ManagePageContent({
 			setIsManaging(false);
 		}
 
-		setIsReviewing(false);
-		setConfirmationValue("");
+		setPendingChanges((previous) => {
+			const next = new Map(previous);
 
-		const processedRepositories = new Set(
-			collectedResults.map((result) => result.repository)
-		);
+			for (const result of collectedResults) {
+				if (result.ok) {
+					next.delete(result.repository);
+				}
+			}
 
-		setSelectedRepositories([
-			...collectedResults
-				.filter((result) => !result.ok)
-				.map((result) => result.repository),
-			...selectedRepositories.filter(
-				(repositoryName) => !processedRepositories.has(repositoryName)
-			),
-		]);
+			return next;
+		});
 		showManageResultToast(collectedResults, runError);
 		await onRunComplete(
 			collectedResults.some((result) =>
@@ -214,20 +284,6 @@ export function ManagePageContent({
 				)
 			)
 		);
-	};
-
-	const retryFailedUpdates = (): void => {
-		if (!manageResults) {
-			return;
-		}
-
-		setSelectedRepositories(
-			manageResults
-				.filter((result) => !result.ok)
-				.map((result) => result.repository)
-		);
-		setConfirmationValue("");
-		setIsReviewing(true);
 	};
 
 	return (
@@ -251,15 +307,19 @@ export function ManagePageContent({
 					{account && !isLoadingManageData ? (
 						<section className="space-y-6">
 							<ManageSettingsPanel
-								actions={manageActions}
+								actions={bulkActions}
 								isManaging={isManaging}
-								onChangeArchiveAction={setArchiveAction}
-								onChangeSubscriptionAction={setSubscriptionAction}
-								onChangeVisibilityAction={setVisibilityAction}
+								onApplyToSelection={applyBulkActionsToSelection}
+								onChangeArchiveAction={setBulkArchiveAction}
+								onChangeSubscriptionAction={setBulkSubscriptionAction}
+								onChangeVisibilityAction={setBulkVisibilityAction}
+								selectedRepositoryCount={selectedRepositories.length}
+								supportsInternalVisibility={pageData.supportsInternalVisibility}
 							/>
 							<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 								<Text>
-									Select repositories in <Strong>{account}</Strong> to update.
+									Edit repositories in <Strong>{account}</Strong> row by row, or
+									select rows to bulk edit.
 								</Text>
 								<div className="grid gap-3 sm:min-w-lg sm:grid-cols-[minmax(0,1fr)_12rem]">
 									<InputGroup>
@@ -286,10 +346,15 @@ export function ManagePageContent({
 								<RepositoriesTable
 									filteredRepositories={paginatedRepositories}
 									isManaging={isManaging}
-									onToggle={handleToggleRepository}
+									onStagePendingField={setRepositoryPendingField}
+									onToggle={toggleRepository}
+									pendingChanges={pendingChanges}
 									pendingRepositories={pendingRepositorySet}
 									resultsByRepository={resultsByRepository}
 									selectedRepositories={selectedRepositorySet}
+									supportsInternalVisibility={
+										pageData.supportsInternalVisibility
+									}
 									watchedRepositories={watchedRepositorySet}
 								/>
 								<RepositoryPagination
@@ -306,37 +371,37 @@ export function ManagePageContent({
 							{manageResults ? (
 								<ManageResultsPanel
 									onClearResults={() => setManageResults(null)}
-									onRetryFailed={retryFailedUpdates}
+									onRetryFailed={() => {
+										setConfirmationValue("");
+										setIsConfirming(true);
+									}}
 									results={manageResults}
 								/>
 							) : null}
-							{isReviewing ? (
-								<ManageReviewPanel
-									account={account}
-									actions={manageActions}
-									confirmationValue={confirmationValue}
-									isManaging={isManaging}
-									onCancel={() => {
-										setConfirmationValue("");
-										setIsReviewing(false);
-									}}
-									onChangeConfirmationValue={setConfirmationValue}
-									onConfirm={handleManage}
-									repositories={repositories}
-									selectedRepositories={selectedRepositories}
-									watchedRepositories={watchedRepositorySet}
-								/>
-							) : (
-								<ManageActionBar
-									hasAction={hasAction}
-									isManaging={isManaging}
-									onReviewChanges={() => {
-										setManageResults(null);
-										setIsReviewing(true);
-									}}
-									selectedRepositoryCount={selectedRepositories.length}
-								/>
-							)}
+							<ManageActionBar
+								isManaging={isManaging}
+								onDiscard={discardPendingChanges}
+								onReviewChanges={() => {
+									setConfirmationValue("");
+									setIsConfirming(true);
+								}}
+								pendingChangeCount={pendingChanges.size}
+							/>
+							<ManageConfirmDialog
+								account={account}
+								confirmationValue={confirmationValue}
+								isManaging={isManaging}
+								onCancel={() => {
+									setConfirmationValue("");
+									setIsConfirming(false);
+								}}
+								onChangeConfirmationValue={setConfirmationValue}
+								onConfirm={handleManage}
+								open={isConfirming}
+								pendingChanges={pendingChanges}
+								repositories={repositories}
+								watchedRepositories={watchedRepositorySet}
+							/>
 						</section>
 					) : (
 						<ManageStartState isLoading={isLoadingManageData} />

@@ -1,6 +1,7 @@
 import { Checkbox } from "@headlessui/react";
 import { type KeyboardEvent, useRef } from "react";
 import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
+import { RepositorySelect } from "@/components/repositories/select";
 import {
 	Table,
 	TableBody,
@@ -10,33 +11,61 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Strong, Text, TextLink } from "@/components/ui/text";
-import type { GitHubRepository, ManageRepositoryResult } from "@/github";
-import type { ManageRepositoryStatus } from "./types";
-import { getManageRepositoryStatus } from "./utils";
+import type {
+	GitHubRepository,
+	ManageRepositoryResult,
+	RepositorySubscriptionState,
+	RepositoryVisibility,
+} from "@/github";
+import {
+	MANAGE_ARCHIVED_STATE_LABELS,
+	MANAGE_ARCHIVED_STATE_OPTIONS,
+	MANAGE_SUBSCRIPTION_STATE_LABELS,
+	MANAGE_SUBSCRIPTION_STATE_OPTIONS,
+	MANAGE_VISIBILITY_STATE_LABELS,
+	type ManageArchivedState,
+	type ManageRepositoryStatus,
+} from "./types";
+import {
+	getManageRepositoryStatus,
+	getManageVisibilityStateOptions,
+	getRepositorySubscriptionDisplayState,
+	type RepositoryPendingChange,
+	type StagePendingFieldHandler,
+} from "./utils";
 
 const TABLE_COLUMN_COUNT = 8;
 
-const capitalize = (value: string): string =>
-	value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+const getArchivedState = (isArchived: boolean): ManageArchivedState =>
+	isArchived ? "archived" : "active";
 
 export function RepositoriesTable({
 	filteredRepositories,
 	isManaging,
+	onStagePendingField,
 	onToggle,
+	pendingChanges,
 	pendingRepositories,
 	resultsByRepository,
 	selectedRepositories,
+	supportsInternalVisibility,
 	watchedRepositories,
 }: Readonly<{
 	filteredRepositories: GitHubRepository[];
 	isManaging: boolean;
+	onStagePendingField: StagePendingFieldHandler;
 	onToggle: (repositoryName: string, shouldSelectRange?: boolean) => void;
+	pendingChanges: ReadonlyMap<string, RepositoryPendingChange>;
 	pendingRepositories: Set<string>;
 	resultsByRepository: Map<string, ManageRepositoryResult>;
 	selectedRepositories: Set<string>;
+	supportsInternalVisibility: boolean;
 	watchedRepositories: Set<string>;
 }>) {
 	const checkboxShouldSelectRangeRef = useRef(false);
+	const visibilityOptions = getManageVisibilityStateOptions(
+		supportsInternalVisibility
+	);
 
 	const handleRowKeyDown = (
 		event: KeyboardEvent<HTMLTableRowElement>,
@@ -61,7 +90,9 @@ export function RepositoriesTable({
 			<Table>
 				<TableHead>
 					<TableRow>
-						<TableHeader>Select</TableHeader>
+						<TableHeader className="!px-2 w-0">
+							<span className="sr-only">Select</span>
+						</TableHeader>
 						<TableHeader>Name</TableHeader>
 						<TableHeader>Visibility</TableHeader>
 						<TableHeader>Archived</TableHeader>
@@ -79,6 +110,15 @@ export function RepositoriesTable({
 								pendingRepositories,
 								resultsByRepository
 							);
+							const pendingChange = pendingChanges.get(repository.name);
+							const currentArchivedState = getArchivedState(
+								repository.archived
+							);
+							const currentSubscriptionState =
+								getRepositorySubscriptionDisplayState(
+									repository.name,
+									watchedRepositories
+								);
 
 							return (
 								<TableRow
@@ -95,7 +135,7 @@ export function RepositoriesTable({
 									}
 									tabIndex={0}
 								>
-									<TableCell>
+									<TableCell className="!px-2">
 										<Checkbox
 											aria-label={`Select ${repository.name}`}
 											checked={selectedRepositories.has(repository.name)}
@@ -129,29 +169,75 @@ export function RepositoriesTable({
 										</Checkbox>
 									</TableCell>
 									<TableCell>
-										<div>
-											<Strong>{repository.name}</Strong>
-											<Text className="mt-1">{repository.fullName}</Text>
-										</div>
+										<Strong>{repository.name}</Strong>
 									</TableCell>
-									<TableCell>
-										<RepositoryBadge>
-											{capitalize(repository.visibility)}
-										</RepositoryBadge>
+									<TableCell onClick={(event) => event.stopPropagation()}>
+										<PendingEditCell<RepositoryVisibility>
+											ariaLabel={`Visibility for ${repository.name}`}
+											disabled={isManaging}
+											onChange={(value) =>
+												onStagePendingField(
+													repository.name,
+													"visibility",
+													value,
+													repository.visibility
+												)
+											}
+											options={visibilityOptions}
+											previousLabel={
+												MANAGE_VISIBILITY_STATE_LABELS[repository.visibility]
+											}
+											staged={pendingChange?.visibility !== undefined}
+											value={pendingChange?.visibility ?? repository.visibility}
+										/>
 									</TableCell>
-									<TableCell>
-										{repository.archived ? (
-											<RepositoryBadge>Archived</RepositoryBadge>
-										) : (
-											<Text>Active</Text>
-										)}
+									<TableCell onClick={(event) => event.stopPropagation()}>
+										<PendingEditCell<ManageArchivedState>
+											ariaLabel={`Archived state for ${repository.name}`}
+											disabled={isManaging}
+											onChange={(value) =>
+												onStagePendingField(
+													repository.name,
+													"archived",
+													value === "archived",
+													repository.archived
+												)
+											}
+											options={MANAGE_ARCHIVED_STATE_OPTIONS}
+											previousLabel={
+												MANAGE_ARCHIVED_STATE_LABELS[currentArchivedState]
+											}
+											staged={pendingChange?.archived !== undefined}
+											value={
+												pendingChange?.archived === undefined
+													? currentArchivedState
+													: getArchivedState(pendingChange.archived)
+											}
+										/>
 									</TableCell>
-									<TableCell>
-										<Text>
-											{watchedRepositories.has(repository.name)
-												? "Watching"
-												: "Not watching"}
-										</Text>
+									<TableCell onClick={(event) => event.stopPropagation()}>
+										<PendingEditCell<RepositorySubscriptionState>
+											ariaLabel={`Notifications for ${repository.name}`}
+											disabled={isManaging}
+											onChange={(value) =>
+												onStagePendingField(
+													repository.name,
+													"subscription",
+													value,
+													currentSubscriptionState
+												)
+											}
+											options={MANAGE_SUBSCRIPTION_STATE_OPTIONS}
+											previousLabel={
+												MANAGE_SUBSCRIPTION_STATE_LABELS[
+													currentSubscriptionState
+												]
+											}
+											staged={pendingChange?.subscription !== undefined}
+											value={
+												pendingChange?.subscription ?? currentSubscriptionState
+											}
+										/>
 									</TableCell>
 									<TableCell>
 										<Text>{formatRepositoryPushedAt(repository.pushedAt)}</Text>
@@ -183,6 +269,49 @@ export function RepositoriesTable({
 					)}
 				</TableBody>
 			</Table>
+		</div>
+	);
+}
+
+function PendingEditCell<Value extends string>({
+	ariaLabel,
+	disabled,
+	onChange,
+	options,
+	previousLabel,
+	staged,
+	value,
+}: Readonly<{
+	ariaLabel: string;
+	disabled: boolean;
+	onChange: (value: Value) => void;
+	options: ReadonlyArray<{
+		label: string;
+		value: Value;
+	}>;
+	previousLabel: string;
+	staged: boolean;
+	value: Value;
+}>) {
+	return (
+		<div className="w-44">
+			<RepositorySelect<Value>
+				ariaLabel={ariaLabel}
+				className={
+					staged
+						? "mt-0 rounded-lg ring-2 ring-amber-500 dark:ring-amber-400"
+						: "mt-0"
+				}
+				disabled={disabled}
+				onChange={onChange}
+				options={options}
+				value={value}
+			/>
+			{staged ? (
+				<Text className="mt-1 text-amber-700 dark:text-amber-400">
+					was {previousLabel}
+				</Text>
+			) : null}
 		</div>
 	);
 }

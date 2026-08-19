@@ -16,14 +16,19 @@ import type {
 	RepositoryVisibility,
 } from "@/github";
 import {
+	getBulkPendingChange,
 	getManageActionsSummary,
+	getManageChangeInputs,
 	getManageRepositoryStatus,
 	getManageResultCounts,
 	getManageResultDetails,
 	getManageResultLabel,
-	getRepositoryChangeLines,
-	hasManageAction,
+	getManageVisibilityStateOptions,
+	getPendingChangeLines,
+	getRepositorySubscriptionDisplayState,
+	type RepositoryPendingChange,
 	showManageResultToast,
+	withPendingField,
 } from "./utils";
 
 let nextRepositoryId = 1;
@@ -217,26 +222,147 @@ describe("getManageActionsSummary", () => {
 	});
 });
 
-describe("hasManageAction", () => {
-	it("is false when every action keeps the current value", () => {
-		expect(hasManageAction(createActions())).toBe(false);
+describe("getRepositorySubscriptionDisplayState", () => {
+	it("reports watching for a watched repository", () => {
+		expect(
+			getRepositorySubscriptionDisplayState("repo", new Set(["repo"]))
+		).toBe("watching");
 	});
 
-	it("is true when one action changes something", () => {
-		expect(hasManageAction(createActions({ archiveAction: "archived" }))).toBe(
-			true
+	it("reports unwatching for a repository that is not watched", () => {
+		expect(getRepositorySubscriptionDisplayState("repo", new Set())).toBe(
+			"unwatching"
 		);
 	});
 });
 
-describe("getRepositoryChangeLines", () => {
-	it("returns no lines when every action keeps the current value", () => {
+describe("withPendingField", () => {
+	it("stages a target that differs from the current value", () => {
 		expect(
-			getRepositoryChangeLines(createRepository(), createActions(), new Set())
-		).toEqual([]);
+			withPendingField(undefined, "visibility", "private", "public")
+		).toEqual({ visibility: "private" });
 	});
 
-	it("lists every setting that will change", () => {
+	it("keeps the fields that are already staged", () => {
+		expect(
+			withPendingField(
+				{ archived: true },
+				"subscription",
+				"ignoring",
+				"watching"
+			)
+		).toEqual({ archived: true, subscription: "ignoring" });
+	});
+
+	it("un-stages a field when the target matches the current value", () => {
+		expect(
+			withPendingField(
+				{ archived: true, visibility: "private" },
+				"visibility",
+				"public",
+				"public"
+			)
+		).toEqual({ archived: true });
+	});
+
+	it("returns null when nothing stays staged", () => {
+		expect(
+			withPendingField({ archived: true }, "archived", false, false)
+		).toBeNull();
+	});
+
+	it("returns null when an unstaged field already matches", () => {
+		expect(withPendingField(undefined, "archived", true, true)).toBeNull();
+	});
+});
+
+describe("getBulkPendingChange", () => {
+	it("stamps every action that is not 'keep current'", () => {
+		const repository = createRepository({ archived: false, name: "repo" });
+
+		expect(
+			getBulkPendingChange(
+				repository,
+				undefined,
+				createActions({
+					archiveAction: "archived",
+					subscriptionAction: "ignoring",
+					visibilityAction: "private",
+				}),
+				new Set(["repo"])
+			)
+		).toEqual({
+			archived: true,
+			subscription: "ignoring",
+			visibility: "private",
+		});
+	});
+
+	it("clears a staged field when the stamped value matches the repository", () => {
+		const repository = createRepository({ name: "repo", visibility: "public" });
+
+		expect(
+			getBulkPendingChange(
+				repository,
+				{ visibility: "private" },
+				createActions({ visibilityAction: "public" }),
+				new Set()
+			)
+		).toBeNull();
+	});
+
+	it("leaves the pending change untouched when every action keeps the current value", () => {
+		expect(
+			getBulkPendingChange(
+				createRepository({ name: "repo" }),
+				{ archived: true },
+				createActions(),
+				new Set()
+			)
+		).toEqual({ archived: true });
+	});
+});
+
+describe("getManageChangeInputs", () => {
+	it("maps archived booleans to archive actions and keeps repository names", () => {
+		const pendingChanges = new Map<string, RepositoryPendingChange>([
+			["first", { archived: true }],
+			["second", { archived: false }],
+		]);
+
+		expect(getManageChangeInputs(pendingChanges)).toEqual([
+			{ archiveAction: "archived", repository: "first" },
+			{ archiveAction: "unarchived", repository: "second" },
+		]);
+	});
+
+	it("omits fields that are not staged", () => {
+		const pendingChanges = new Map<string, RepositoryPendingChange>([
+			["repo", { subscription: "ignoring", visibility: "internal" }],
+		]);
+
+		expect(getManageChangeInputs(pendingChanges)).toEqual([
+			{
+				repository: "repo",
+				subscriptionAction: "ignoring",
+				visibilityAction: "internal",
+			},
+		]);
+	});
+
+	it("returns an empty list when nothing is staged", () => {
+		expect(getManageChangeInputs(new Map())).toEqual([]);
+	});
+});
+
+describe("getPendingChangeLines", () => {
+	it("returns no lines for an empty change", () => {
+		expect(getPendingChangeLines(createRepository(), {}, new Set())).toEqual(
+			[]
+		);
+	});
+
+	it("lists every staged field", () => {
 		const repository = createRepository({
 			archived: false,
 			name: "repo",
@@ -244,13 +370,9 @@ describe("getRepositoryChangeLines", () => {
 		});
 
 		expect(
-			getRepositoryChangeLines(
+			getPendingChangeLines(
 				repository,
-				createActions({
-					archiveAction: "archived",
-					subscriptionAction: "ignoring",
-					visibilityAction: "public",
-				}),
+				{ archived: true, subscription: "ignoring", visibility: "public" },
 				new Set(["repo"])
 			)
 		).toEqual([
@@ -260,53 +382,48 @@ describe("getRepositoryChangeLines", () => {
 		]);
 	});
 
-	it("omits settings that already match the target", () => {
-		const repository = createRepository({
-			archived: true,
-			name: "repo",
-			visibility: "public",
-		});
-
+	it("reports unarchiving from the current state", () => {
 		expect(
-			getRepositoryChangeLines(
-				repository,
-				createActions({
-					archiveAction: "archived",
-					subscriptionAction: "watching",
-					visibilityAction: "public",
-				}),
-				new Set(["repo"])
-			)
-		).toEqual([]);
-	});
-
-	it("reports unarchiving and unwatching from the current state", () => {
-		const repository = createRepository({
-			archived: true,
-			name: "repo",
-			visibility: "public",
-		});
-
-		expect(
-			getRepositoryChangeLines(
-				repository,
-				createActions({
-					archiveAction: "unarchived",
-					subscriptionAction: "unwatching",
-				}),
-				new Set(["repo"])
-			)
-		).toEqual(["Archived: yes → no", "Notifications: watching → not watching"]);
-	});
-
-	it("omits unwatching when the repository is not watched", () => {
-		expect(
-			getRepositoryChangeLines(
-				createRepository({ name: "repo" }),
-				createActions({ subscriptionAction: "unwatching" }),
+			getPendingChangeLines(
+				createRepository({ archived: true, name: "repo" }),
+				{ archived: false },
 				new Set()
 			)
-		).toEqual([]);
+		).toEqual(["Archived: yes → no"]);
+	});
+
+	it("labels the unwatching state as not watching", () => {
+		expect(
+			getPendingChangeLines(
+				createRepository({ name: "repo" }),
+				{ subscription: "unwatching" },
+				new Set(["repo"])
+			)
+		).toEqual(["Notifications: watching → not watching"]);
+	});
+
+	it("reads the current notification state from the watched set", () => {
+		expect(
+			getPendingChangeLines(
+				createRepository({ name: "repo" }),
+				{ subscription: "watching" },
+				new Set()
+			)
+		).toEqual(["Notifications: not watching → watching"]);
+	});
+});
+
+describe("getManageVisibilityStateOptions", () => {
+	it("omits internal when the account does not support it", () => {
+		expect(
+			getManageVisibilityStateOptions(false).map((option) => option.value)
+		).toEqual(["public", "private"]);
+	});
+
+	it("includes internal when the account supports it", () => {
+		expect(
+			getManageVisibilityStateOptions(true).map((option) => option.value)
+		).toEqual(["public", "private", "internal"]);
 	});
 });
 

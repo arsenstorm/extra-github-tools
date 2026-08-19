@@ -1,4 +1,5 @@
 import { RepositorySelect } from "@/components/repositories/select";
+import { Button } from "@/components/ui/button";
 import {
 	Description,
 	Field,
@@ -6,6 +7,7 @@ import {
 	Fieldset,
 	Label,
 } from "@/components/ui/fieldset";
+import { Subheading } from "@/components/ui/heading";
 import { Text } from "@/components/ui/text";
 import type {
 	ManageRepositoryActions,
@@ -16,30 +18,45 @@ import type {
 import {
 	MANAGE_ARCHIVE_ACTION_OPTIONS,
 	MANAGE_SUBSCRIPTION_ACTION_OPTIONS,
-	MANAGE_VISIBILITY_ACTION_OPTIONS,
 } from "./types";
-import { getManageActionsSummary } from "./utils";
+import {
+	getManageActionsSummary,
+	getManageVisibilityActionOptions,
+} from "./utils";
 
 export function ManageSettingsPanel({
 	actions,
 	isManaging,
+	onApplyToSelection,
 	onChangeArchiveAction,
 	onChangeSubscriptionAction,
 	onChangeVisibilityAction,
+	selectedRepositoryCount,
+	supportsInternalVisibility,
 }: Readonly<{
 	actions: ManageRepositoryActions;
 	isManaging: boolean;
+	onApplyToSelection: () => void;
 	onChangeArchiveAction: (value: ManageRepositoryArchiveAction) => void;
 	onChangeSubscriptionAction: (
 		value: ManageRepositorySubscriptionAction
 	) => void;
 	onChangeVisibilityAction: (value: ManageRepositoryVisibilityAction) => void;
+	selectedRepositoryCount: number;
+	supportsInternalVisibility: boolean;
 }>) {
 	const actionsSummary = getManageActionsSummary(actions);
+	const canApply =
+		!isManaging && actionsSummary.length > 0 && selectedRepositoryCount > 0;
 
 	return (
 		<section className="rounded-lg border border-zinc-950/10 p-4 dark:border-white/10">
-			<Fieldset>
+			<Subheading>Bulk edit</Subheading>
+			<Text className="mt-1">
+				Set the same values on every selected repository. You can also edit each
+				row on its own.
+			</Text>
+			<Fieldset className="mt-4">
 				<FieldGroup className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
 					<Field>
 						<Label>Archived state</Label>
@@ -61,11 +78,15 @@ export function ManageSettingsPanel({
 							ariaLabel="Visibility"
 							disabled={isManaging}
 							onChange={onChangeVisibilityAction}
-							options={MANAGE_VISIBILITY_ACTION_OPTIONS}
+							options={getManageVisibilityActionOptions(
+								supportsInternalVisibility
+							)}
 							value={actions.visibilityAction}
 						/>
 						<Description>
-							Internal only works in organizations on GitHub Enterprise.
+							{supportsInternalVisibility
+								? "Internal repositories are visible to everyone in the organization."
+								: "Internal is only available in organizations on GitHub Enterprise."}
 						</Description>
 					</Field>
 					<Field>
@@ -83,11 +104,16 @@ export function ManageSettingsPanel({
 					</Field>
 				</FieldGroup>
 			</Fieldset>
-			<Text className="mt-4">
-				{actionsSummary
-					? `A run will: ${actionsSummary}.`
-					: "Pick at least one setting to change."}
-			</Text>
+			<div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<Text>
+					{actionsSummary
+						? `Apply will: ${actionsSummary}.`
+						: "Pick a setting to apply to the selected repositories."}
+				</Text>
+				<Button disabled={!canApply} onClick={onApplyToSelection} outline>
+					Apply to {selectedRepositoryCount} selected
+				</Button>
+			</div>
 		</section>
 	);
 }
