@@ -22,7 +22,6 @@ export function RepositoriesTable({
 				<TableRow>
 					<TableHeader>ID</TableHeader>
 					<TableHeader>Name</TableHeader>
-					<TableHeader>Full Name</TableHeader>
 					<TableHeader>Actions</TableHeader>
 				</TableRow>
 			</TableHead>
@@ -39,9 +38,6 @@ export function RepositoriesTable({
 								<Text>{repository.name}</Text>
 							</TableCell>
 							<TableCell>
-								<Text>{repository.fullName}</Text>
-							</TableCell>
-							<TableCell>
 								<Text>
 									<TextLink
 										href={repository.htmlUrl}
@@ -56,7 +52,7 @@ export function RepositoriesTable({
 					))
 				) : (
 					<TableRow>
-						<TableCell className="text-center" colSpan={4}>
+						<TableCell className="text-center" colSpan={3}>
 							No repositories found.
 						</TableCell>
 					</TableRow>

@@ -54,7 +54,9 @@ export function RepositoriesTable({
 			<Table>
 				<TableHead>
 					<TableRow>
-						<TableHeader>Select</TableHeader>
+						<TableHeader className="!px-2 w-0">
+							<span className="sr-only">Select</span>
+						</TableHeader>
 						<TableHeader>Name</TableHeader>
 						<TableHeader>Visibility</TableHeader>
 						<TableHeader>Type</TableHeader>
@@ -87,7 +89,7 @@ export function RepositoriesTable({
 									}
 									tabIndex={0}
 								>
-									<TableCell>
+									<TableCell className="!px-2">
 										<Checkbox
 											aria-label={`Select ${repository.name}`}
 											checked={selectedRepositories.has(repository.name)}
@@ -121,10 +123,7 @@ export function RepositoriesTable({
 										</Checkbox>
 									</TableCell>
 									<TableCell>
-										<div>
-											<Strong>{repository.name}</Strong>
-											<Text className="mt-1">{repository.fullName}</Text>
-										</div>
+										<Strong>{repository.name}</Strong>
 									</TableCell>
 									<TableCell>
 										<RepositoryBadge>
