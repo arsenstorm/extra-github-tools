@@ -1,3 +1,4 @@
+import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
 import {
 	Table,
 	TableBody,
@@ -6,7 +7,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Text, TextLink } from "@/components/ui/text";
+import { Text } from "@/components/ui/text";
 import type { GitHubRepository } from "@/github";
 
 export function RepositoriesTable({
@@ -22,7 +23,9 @@ export function RepositoriesTable({
 				<TableRow>
 					<TableHeader>ID</TableHeader>
 					<TableHeader>Name</TableHeader>
-					<TableHeader>Actions</TableHeader>
+					<TableHeader className="w-0">
+						<span className="sr-only">Actions</span>
+					</TableHeader>
 				</TableRow>
 			</TableHead>
 			<TableBody>
@@ -37,16 +40,11 @@ export function RepositoriesTable({
 							<TableCell>
 								<Text>{repository.name}</Text>
 							</TableCell>
-							<TableCell>
-								<Text>
-									<TextLink
-										href={repository.htmlUrl}
-										rel="noopener noreferrer"
-										target="_blank"
-									>
-										View on GitHub
-									</TextLink>
-								</Text>
+							<TableCell onClick={(event) => event.stopPropagation()}>
+								<RepositoryActionsMenu
+									htmlUrl={repository.htmlUrl}
+									repositoryName={repository.name}
+								/>
 							</TableCell>
 						</TableRow>
 					))

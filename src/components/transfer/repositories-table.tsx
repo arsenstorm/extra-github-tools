@@ -1,5 +1,6 @@
 import { Checkbox } from "@headlessui/react";
 import { type KeyboardEvent, useRef } from "react";
+import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
 import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
 import {
 	Table,
@@ -9,7 +10,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { Strong, Text, TextLink } from "@/components/ui/text";
+import { Strong, Text } from "@/components/ui/text";
 import type { GitHubRepository, TransferRepositoryResult } from "@/github";
 import type { RepositoryStatus } from "./types";
 import { getRepositoryStatus } from "./utils";
@@ -54,7 +55,7 @@ export function RepositoriesTable({
 			<Table>
 				<TableHead>
 					<TableRow>
-						<TableHeader className="!px-2 w-0">
+						<TableHeader className="w-0 pr-2! pl-4!">
 							<span className="sr-only">Select</span>
 						</TableHeader>
 						<TableHeader>Name</TableHeader>
@@ -62,7 +63,9 @@ export function RepositoriesTable({
 						<TableHeader>Type</TableHeader>
 						<TableHeader>Last pushed</TableHeader>
 						<TableHeader>Status</TableHeader>
-						<TableHeader>Actions</TableHeader>
+						<TableHeader className="w-0">
+							<span className="sr-only">Actions</span>
+						</TableHeader>
 					</TableRow>
 				</TableHead>
 				<TableBody>
@@ -89,11 +92,11 @@ export function RepositoriesTable({
 									}
 									tabIndex={0}
 								>
-									<TableCell className="!px-2">
+									<TableCell className="pr-2! pl-4!">
 										<Checkbox
 											aria-label={`Select ${repository.name}`}
 											checked={selectedRepositories.has(repository.name)}
-											className="group block size-4 rounded border bg-white data-checked:bg-zinc-500 data-disabled:opacity-50"
+											className="group block size-4 rounded border-none! bg-white data-checked:bg-zinc-500 data-disabled:opacity-50"
 											disabled={isTransferring}
 											onChange={() => {
 												onToggle(
@@ -149,17 +152,11 @@ export function RepositoriesTable({
 									<TableCell>
 										<RepositoryStatusBadge status={repositoryStatus} />
 									</TableCell>
-									<TableCell>
-										<Text>
-											<TextLink
-												href={repository.htmlUrl}
-												onClick={(event) => event.stopPropagation()}
-												rel="noopener noreferrer"
-												target="_blank"
-											>
-												View on GitHub
-											</TextLink>
-										</Text>
+									<TableCell onClick={(event) => event.stopPropagation()}>
+										<RepositoryActionsMenu
+											htmlUrl={repository.htmlUrl}
+											repositoryName={repository.name}
+										/>
 									</TableCell>
 								</TableRow>
 							);
