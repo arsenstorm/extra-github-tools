@@ -1,6 +1,7 @@
 import { getGitHubAccessTokenFromHeaders } from "./auth.server";
 import {
 	analyzeGitHubRepository,
+	getGitHubOrganizationSupportsInternal,
 	isGitHubContributorStatsPendingError,
 	listGitHubAccounts,
 	listGitHubRepositories,
@@ -254,6 +255,7 @@ export async function resolveManagePageData(
 			error: null,
 			organizations: null,
 			repositories: null,
+			supportsInternalVisibility: false,
 			watchedRepositories: null,
 		};
 	}
@@ -266,16 +268,22 @@ export async function resolveManagePageData(
 				error: null,
 				organizations: await listGitHubAccounts(githubAuth.accessToken),
 				repositories: null,
+				supportsInternalVisibility: false,
 				watchedRepositories: null,
 			};
 		}
 
-		const [organizations, repositories, watchedRepositoryFullNames] =
-			await Promise.all([
-				listGitHubAccounts(githubAuth.accessToken),
-				listGitHubRepositories(githubAuth.accessToken, account),
-				listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
-			]);
+		const [
+			organizations,
+			repositories,
+			watchedRepositoryFullNames,
+			organizationSupportsInternal,
+		] = await Promise.all([
+			listGitHubAccounts(githubAuth.accessToken),
+			listGitHubRepositories(githubAuth.accessToken, account),
+			listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
+			getGitHubOrganizationSupportsInternal(githubAuth.accessToken, account),
+		]);
 		const accountPrefix = `${account.toLowerCase()}/`;
 		const watchedRepositories = watchedRepositoryFullNames
 			.filter((fullName) => fullName.toLowerCase().startsWith(accountPrefix))
@@ -285,6 +293,9 @@ export async function resolveManagePageData(
 			error: null,
 			organizations,
 			repositories,
+			supportsInternalVisibility:
+				organizationSupportsInternal ||
+				repositories.some((repository) => repository.visibility === "internal"),
 			watchedRepositories,
 		};
 	} catch (error) {
@@ -292,6 +303,7 @@ export async function resolveManagePageData(
 			error: toMessage(error, "Failed to load repository data."),
 			organizations: null,
 			repositories: null,
+			supportsInternalVisibility: false,
 			watchedRepositories: null,
 		};
 	}
@@ -311,9 +323,9 @@ export async function runManageRepositoriesAction(
 		};
 	}
 
-	if (data.repositories.length === 0) {
+	if (data.changes.length === 0) {
 		return {
-			error: "Select at least one repository to update.",
+			error: "Select at least one change to apply.",
 			results: null,
 			success: false,
 		};
@@ -327,32 +339,18 @@ export async function runManageRepositoriesAction(
 		};
 	}
 
-	const archiveAction = data.archiveAction ?? "current";
-	const subscriptionAction = data.subscriptionAction ?? "current";
-	const visibilityAction = data.visibilityAction ?? "current";
-
-	if (
-		archiveAction === "current" &&
-		subscriptionAction === "current" &&
-		visibilityAction === "current"
-	) {
-		return {
-			error: "Choose at least one setting to change.",
-			results: null,
-			success: false,
-		};
-	}
-
 	try {
 		const results = await manageGitHubRepositories(
 			githubAuth.accessToken,
 			data.account,
-			data.repositories,
-			{
-				archiveAction,
-				subscriptionAction,
-				visibilityAction,
-			}
+			data.changes.map((change) => ({
+				actions: {
+					archiveAction: change.archiveAction ?? "current",
+					subscriptionAction: change.subscriptionAction ?? "current",
+					visibilityAction: change.visibilityAction ?? "current",
+				},
+				repository: change.repository,
+			}))
 		);
 		const failedCount = results.filter((result) => !result.ok).length;
 

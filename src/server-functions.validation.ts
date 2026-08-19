@@ -13,6 +13,7 @@ import {
 import type {
 	FameSearchInput,
 	ManageRepositoriesInput,
+	ManageRepositoryChangeInput,
 	ManageSearchInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
@@ -143,6 +144,58 @@ export const validateManageSearchInput = (
 	};
 };
 
+const toManageRepositoryChanges = (
+	value: unknown
+): ManageRepositoryChangeInput[] => {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	const changes: ManageRepositoryChangeInput[] = [];
+	const seenRepositories = new Set<string>();
+
+	for (const item of value) {
+		const input = toUnknownRecord<ManageRepositoryChangeInput>(item);
+		const repository = toTrimmedString(input.repository);
+
+		if (!repository || seenRepositories.has(repository)) {
+			continue;
+		}
+
+		const archiveAction = isManageRepositoryArchiveAction(input.archiveAction)
+			? input.archiveAction
+			: "current";
+		const subscriptionAction = isManageRepositorySubscriptionAction(
+			input.subscriptionAction
+		)
+			? input.subscriptionAction
+			: "current";
+		const visibilityAction = isManageRepositoryVisibilityAction(
+			input.visibilityAction
+		)
+			? input.visibilityAction
+			: "current";
+
+		if (
+			archiveAction === "current" &&
+			subscriptionAction === "current" &&
+			visibilityAction === "current"
+		) {
+			continue;
+		}
+
+		seenRepositories.add(repository);
+		changes.push({
+			archiveAction,
+			repository,
+			subscriptionAction,
+			visibilityAction,
+		});
+	}
+
+	return changes;
+};
+
 export const validateManageRepositoriesInput = (
 	data: ManageRepositoriesInput
 ): ManageRepositoriesInput => {
@@ -150,17 +203,6 @@ export const validateManageRepositoriesInput = (
 
 	return {
 		account: toTrimmedString(input.account),
-		archiveAction: isManageRepositoryArchiveAction(input.archiveAction)
-			? input.archiveAction
-			: "current",
-		repositories: toRepositoryNames(input.repositories),
-		subscriptionAction: isManageRepositorySubscriptionAction(
-			input.subscriptionAction
-		)
-			? input.subscriptionAction
-			: "current",
-		visibilityAction: isManageRepositoryVisibilityAction(input.visibilityAction)
-			? input.visibilityAction
-			: "current",
+		changes: toManageRepositoryChanges(input.changes),
 	};
 };

@@ -144,78 +144,31 @@ const asManageInput = (value: unknown): ManageRepositoriesInput =>
 
 const emptyManageInput: ManageRepositoriesInput = {
 	account: "",
-	archiveAction: "current",
-	repositories: [],
-	subscriptionAction: "current",
-	visibilityAction: "current",
+	changes: [],
 };
 
 describe("validateManageRepositoriesInput", () => {
-	it("trims account and dedupes repository names", () => {
+	it("trims account", () => {
 		expect(
 			validateManageRepositoriesInput({
 				account: " acme ",
-				repositories: [" a ", "b", "a", "", "  "],
+				changes: [],
 			})
 		).toEqual({
 			account: "acme",
-			archiveAction: "current",
-			repositories: ["a", "b"],
-			subscriptionAction: "current",
-			visibilityAction: "current",
+			changes: [],
 		});
 	});
 
-	it("treats non-string fields as empty", () => {
+	it("treats non-string account and non-array changes as empty", () => {
 		expect(
 			validateManageRepositoriesInput(
 				asManageInput({
 					account: 42,
-					repositories: "nope",
+					changes: "nope",
 				})
 			)
 		).toEqual(emptyManageInput);
-	});
-
-	it("drops non-string repository entries", () => {
-		expect(
-			validateManageRepositoriesInput(
-				asManageInput({
-					account: "acme",
-					repositories: ["ok", 1, null, undefined, "also"],
-				})
-			).repositories
-		).toEqual(["ok", "also"]);
-	});
-
-	it("falls back to current for unknown action values", () => {
-		const result = validateManageRepositoriesInput(
-			asManageInput({
-				account: "acme",
-				archiveAction: "banana",
-				repositories: [],
-				subscriptionAction: "banana",
-				visibilityAction: "banana",
-			})
-		);
-
-		expect(result.archiveAction).toBe("current");
-		expect(result.subscriptionAction).toBe("current");
-		expect(result.visibilityAction).toBe("current");
-	});
-
-	it("keeps valid action values", () => {
-		const result = validateManageRepositoriesInput({
-			account: "acme",
-			archiveAction: "archived",
-			repositories: [],
-			subscriptionAction: "ignoring",
-			visibilityAction: "internal",
-		});
-
-		expect(result.archiveAction).toBe("archived");
-		expect(result.subscriptionAction).toBe("ignoring");
-		expect(result.visibilityAction).toBe("internal");
 	});
 
 	it("does not throw on null or non-object input", () => {
@@ -225,6 +178,101 @@ describe("validateManageRepositoriesInput", () => {
 		expect(validateManageRepositoriesInput(asManageInput("string"))).toEqual(
 			emptyManageInput
 		);
+	});
+
+	it("dedupes changes by repository, first occurrence wins", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ archiveAction: "archived", repository: " repo " },
+					{ repository: "repo", visibilityAction: "internal" },
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([
+			{
+				archiveAction: "archived",
+				repository: "repo",
+				subscriptionAction: "current",
+				visibilityAction: "current",
+			},
+		]);
+	});
+
+	it("drops entries with a blank repository", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ archiveAction: "archived", repository: "  " },
+					{ archiveAction: "archived", repository: 42 },
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("drops entries where all actions are 'current'", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ repository: "repo" },
+					{
+						archiveAction: "current",
+						repository: "other",
+						subscriptionAction: "current",
+						visibilityAction: "current",
+					},
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("falls back to current for unknown action values, dropping the entry if that leaves it all-current", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{
+						archiveAction: "banana",
+						repository: "repo",
+						subscriptionAction: "banana",
+						visibilityAction: "banana",
+					},
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("keeps valid mixed action values with all three fields present", () => {
+		const result = validateManageRepositoriesInput({
+			account: "acme",
+			changes: [
+				{
+					archiveAction: "archived",
+					repository: "repo",
+					subscriptionAction: "ignoring",
+					visibilityAction: "internal",
+				},
+			],
+		});
+
+		expect(result.changes).toEqual([
+			{
+				archiveAction: "archived",
+				repository: "repo",
+				subscriptionAction: "ignoring",
+				visibilityAction: "internal",
+			},
+		]);
 	});
 });
 

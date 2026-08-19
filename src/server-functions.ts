@@ -67,15 +67,20 @@ export interface ManagePageData {
 	error: string | null;
 	organizations: GitHubAccount[] | null;
 	repositories: GitHubRepository[] | null;
+	supportsInternalVisibility: boolean;
 	watchedRepositories: string[] | null;
+}
+
+export interface ManageRepositoryChangeInput {
+	archiveAction?: ManageRepositoryArchiveAction;
+	repository: string;
+	subscriptionAction?: ManageRepositorySubscriptionAction;
+	visibilityAction?: ManageRepositoryVisibilityAction;
 }
 
 export interface ManageRepositoriesInput {
 	account: string;
-	archiveAction?: ManageRepositoryArchiveAction;
-	repositories: string[];
-	subscriptionAction?: ManageRepositorySubscriptionAction;
-	visibilityAction?: ManageRepositoryVisibilityAction;
+	changes: ManageRepositoryChangeInput[];
 }
 
 export interface ManageRepositoriesResult {
