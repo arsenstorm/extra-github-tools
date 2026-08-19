@@ -40,12 +40,16 @@ export const getGitHubInstallationSettingsUrl = (): string | null => {
 };
 
 export const auth = betterAuth({
+	account: {
+		storeAccountCookie: true,
+		storeStateStrategy: "cookie",
+		updateAccountOnSignIn: true,
+	},
 	appName: "Extra GitHub Tools",
 	baseURL: getAuthBaseUrl(),
-	trustedOrigins: getTrustedOrigins(),
+	plugins: [tanstackStartCookies()],
 	secret: normalizeEnvironmentValue(process.env.AUTH_SECRET) ?? undefined,
 	session: {
-		expiresIn: DEFAULT_SESSION_TTL,
 		cookieCache: {
 			enabled: true,
 			maxAge: DEFAULT_SESSION_TTL,
@@ -53,11 +57,7 @@ export const auth = betterAuth({
 			strategy: "jwe",
 			version: "1",
 		},
-	},
-	account: {
-		storeAccountCookie: true,
-		storeStateStrategy: "cookie",
-		updateAccountOnSignIn: true,
+		expiresIn: DEFAULT_SESSION_TTL,
 	},
 	socialProviders: {
 		github: {
@@ -66,5 +66,5 @@ export const auth = betterAuth({
 			scope: ["read:user", "read:org", "repo"],
 		},
 	},
-	plugins: [tanstackStartCookies()],
+	trustedOrigins: getTrustedOrigins(),
 });

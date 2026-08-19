@@ -39,7 +39,7 @@ export function Avatar({
 					: "rounded-full *:rounded-full"
 			)}
 		>
-			{initials && (
+			{initials ? (
 				<svg
 					aria-hidden={alt ? undefined : "true"}
 					className="select-none fill-current font-medium text-[48px] uppercase"
@@ -57,8 +57,8 @@ export function Avatar({
 						{initials}
 					</text>
 				</svg>
-			)}
-			{src && (
+			) : null}
+			{src ? (
 				<img
 					alt={alt}
 					className="object-cover"
@@ -66,7 +66,7 @@ export function Avatar({
 					src={src}
 					width={512}
 				/>
-			)}
+			) : null}
 		</span>
 	);
 }

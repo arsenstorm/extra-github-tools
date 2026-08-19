@@ -37,12 +37,12 @@ const validateTransferSearch = (
 });
 
 export const Route = createFileRoute("/transfer")({
-	component: TransferRoute,
 	beforeLoad: () => {
 		if (!CONFIG.bulkTransferRepositories.enabled) {
 			throw redirect({ to: "/" });
 		}
 	},
+	component: TransferRoute,
 	head: () => ({
 		meta: [
 			{

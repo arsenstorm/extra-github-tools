@@ -29,16 +29,20 @@ let nextRepositoryId = 1;
 const createRepository = (
 	name: string,
 	pushedAt: string | null
-): GitHubRepository => ({
-	archived: false,
-	fork: false,
-	fullName: `owner/${name}`,
-	htmlUrl: `https://github.com/owner/${name}`,
-	id: nextRepositoryId++,
-	name,
-	private: false,
-	pushedAt,
-});
+): GitHubRepository => {
+	nextRepositoryId += 1;
+
+	return {
+		archived: false,
+		fork: false,
+		fullName: `owner/${name}`,
+		htmlUrl: `https://github.com/owner/${name}`,
+		id: nextRepositoryId,
+		name,
+		private: false,
+		pushedAt,
+	};
+};
 
 const createTransferResult = (
 	overrides: Partial<TransferRepositoryResult> = {}

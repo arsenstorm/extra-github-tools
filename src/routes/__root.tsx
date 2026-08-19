@@ -13,29 +13,12 @@ import { getRootLayoutData } from "@/root-data";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
-	loader: () => getRootLayoutData(),
+	component: RootLayout,
 	head: () => ({
-		meta: [
-			{
-				charSet: "utf-8",
-			},
-			{
-				name: "viewport",
-				content: "width=device-width, initial-scale=1",
-			},
-			{
-				title: "Extra GitHub Tools",
-			},
-			{
-				content:
-					"Extra tools for GitHub that aren’t part of the main interface.",
-				name: "description",
-			},
-		],
 		links: [
 			{
-				rel: "stylesheet",
 				href: appCss,
+				rel: "stylesheet",
 			},
 			{
 				as: "font",
@@ -52,8 +35,25 @@ export const Route = createRootRoute({
 				type: "font/woff",
 			},
 		],
+		meta: [
+			{
+				charSet: "utf-8",
+			},
+			{
+				content: "width=device-width, initial-scale=1",
+				name: "viewport",
+			},
+			{
+				title: "Extra GitHub Tools",
+			},
+			{
+				content:
+					"Extra tools for GitHub that aren’t part of the main interface.",
+				name: "description",
+			},
+		],
 	}),
-	component: RootLayout,
+	loader: () => getRootLayoutData(),
 	shellComponent: RootDocument,
 });
 

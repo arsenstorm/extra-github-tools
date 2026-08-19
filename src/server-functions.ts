@@ -54,7 +54,7 @@ export interface FamePageData {
 }
 
 export const getTransferPageData = createServerFn({ method: "GET" })
-	.inputValidator(validateTransferSearchInput)
+	.validator(validateTransferSearchInput)
 	.handler(async ({ data }) => {
 		const { getRequestHeaders } = await import("@tanstack/react-start/server");
 		const { resolveTransferPageData } = await import(
@@ -65,7 +65,7 @@ export const getTransferPageData = createServerFn({ method: "GET" })
 	});
 
 export const transferRepositoriesAction = createServerFn({ method: "POST" })
-	.inputValidator(validateTransferRepositoriesInput)
+	.validator(validateTransferRepositoriesInput)
 	.handler(async ({ data }): Promise<TransferRepositoriesResult> => {
 		const { getRequestHeaders } = await import("@tanstack/react-start/server");
 		const { runTransferRepositoriesAction } = await import(
@@ -76,7 +76,7 @@ export const transferRepositoriesAction = createServerFn({ method: "POST" })
 	});
 
 export const getFamePageData = createServerFn({ method: "GET" })
-	.inputValidator(validateFameSearchInput)
+	.validator(validateFameSearchInput)
 	.handler(async ({ data }) => {
 		const { getRequestHeaders } = await import("@tanstack/react-start/server");
 		const { resolveFamePageData } = await import("./server-functions.server");

@@ -106,12 +106,12 @@ export const NavbarItem = function NavbarItem({
 
 	return (
 		<span className={clsx(className, "relative")}>
-			{current && (
+			{current ? (
 				<motion.span
 					className="absolute inset-x-2 -bottom-2.5 h-0.5 rounded-full bg-zinc-950 dark:bg-white"
 					layoutId="current-indicator"
 				/>
-			)}
+			) : null}
 			{(() => {
 				if ("to" in props) {
 					return (

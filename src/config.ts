@@ -1,4 +1,11 @@
-export const CONFIG = {
+interface FeatureFlag {
+	enabled: boolean;
+}
+
+export const CONFIG: {
+	bulkTransferRepositories: FeatureFlag;
+	commitFame: FeatureFlag;
+} = {
 	bulkTransferRepositories: {
 		enabled: true,
 	},

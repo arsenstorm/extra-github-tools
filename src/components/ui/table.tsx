@@ -171,7 +171,7 @@ export function TableCell({
 				!bleed && "sm:last:pr-2 sm:first:pl-2"
 			)}
 		>
-			{href && (
+			{href ? (
 				<a
 					aria-label={title}
 					className="absolute inset-0 focus:outline-none"
@@ -182,7 +182,7 @@ export function TableCell({
 				>
 					<span className="sr-only">{title ?? "Open row"}</span>
 				</a>
-			)}
+			) : null}
 			{children}
 		</td>
 	);
