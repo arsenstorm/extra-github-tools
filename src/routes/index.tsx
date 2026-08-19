@@ -25,6 +25,17 @@ const options: {
 	},
 	{
 		description:
+			"Archive, change visibility, and set notification levels for many repositories at once.",
+		enabled: CONFIG.bulkManageRepositories.enabled,
+		label: "Bulk Manage Repositories",
+		link: {
+			color: "emerald",
+			href: "/manage",
+			label: "Bulk Manage Repositories",
+		},
+	},
+	{
+		description:
 			"See how your commits compare to your colleagues and who's doing more.",
 		enabled: CONFIG.commitFame.enabled,
 		label: "Commit Fame",

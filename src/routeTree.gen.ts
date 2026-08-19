@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FameRouteImport } from './routes/fame'
+import { Route as ManageRouteImport } from './routes/manage'
 import { Route as TransferRouteImport } from './routes/transfer'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const FameRoute = FameRouteImport.update({
   id: '/fame',
   path: '/fame',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManageRoute = ManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TransferRoute = TransferRouteImport.update({
@@ -38,12 +44,14 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
+  '/manage': typeof ManageRoute
   '/transfer': typeof TransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
+  '/manage': typeof ManageRoute
   '/transfer': typeof TransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/fame': typeof FameRoute
+  '/manage': typeof ManageRoute
   '/transfer': typeof TransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/fame' | '/transfer' | '/api/auth/$'
+  fullPaths: '/' | '/fame' | '/manage' | '/transfer' | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/fame' | '/transfer' | '/api/auth/$'
-  id: '__root__' | '/' | '/fame' | '/transfer' | '/api/auth/$'
+  to: '/' | '/fame' | '/manage' | '/transfer' | '/api/auth/$'
+  id: '__root__' | '/' | '/fame' | '/manage' | '/transfer' | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   FameRoute: typeof FameRoute
+  ManageRoute: typeof ManageRoute
   TransferRoute: typeof TransferRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/fame'
       fullPath: '/fame'
       preLoaderRoute: typeof FameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/manage': {
+      id: '/manage'
+      path: '/manage'
+      fullPath: '/manage'
+      preLoaderRoute: typeof ManageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/transfer': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   FameRoute: FameRoute,
+  ManageRoute: ManageRoute,
   TransferRoute: TransferRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
