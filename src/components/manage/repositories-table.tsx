@@ -91,7 +91,7 @@ export function RepositoriesTable({
 							return (
 								<TableRow
 									aria-selected={selectedRepositories.has(repository.name)}
-									className="cursor-pointer hover:bg-zinc-100 focus:outline-2 focus:outline-blue-500 dark:hover:bg-zinc-800"
+									className="cursor-pointer hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:-outline-offset-2 dark:hover:bg-zinc-800"
 									key={repository.id}
 									onClick={(event) => {
 										if (!isManaging) {
