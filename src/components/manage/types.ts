@@ -16,6 +16,7 @@ export type ManageRepositoryStatus =
 	| "failed"
 	| "idle"
 	| "pending"
+	| "staged"
 	| "unchanged"
 	| "updated";
 

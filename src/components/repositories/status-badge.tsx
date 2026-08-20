@@ -1,11 +1,8 @@
 import { Text } from "@/components/ui/text";
-import { RepositoryBadge, type RepositoryStatusTone } from "./badge";
+import { RepositoryBadge } from "./badge";
+import type { StateBadgeStyle } from "./state-badges";
 
-export interface StatusBadgeStyle {
-	label: string;
-	/** Omit for the neutral badge. */
-	tone?: RepositoryStatusTone;
-}
+export type StatusBadgeStyle = StateBadgeStyle;
 
 /** Shows a row's run status; "idle" rows read "Not queued" as plain text. */
 export function RepositoryStatusBadge<Status extends string>({

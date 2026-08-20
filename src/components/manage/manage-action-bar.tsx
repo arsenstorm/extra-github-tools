@@ -1,55 +1,96 @@
 import { FloatingActionBar } from "@/components/repositories/floating-action-bar";
 import { Button } from "@/components/ui/button";
 import { Strong } from "@/components/ui/text";
-import { pluralize } from "@/format";
+import { formatRepositoryCount } from "@/format";
 
+/**
+ * Bottom bar for the manage page. Staged changes take precedence: they are
+ * reviewed and run from here, while a selection offers the bulk edit form.
+ */
 export function ManageActionBar({
 	isManaging,
 	managingRepositoryCount,
 	onClearSelection,
+	onDiscardChanges,
 	onEditSettings,
+	onReviewChanges,
 	selectedRepositoryCount,
+	stagedRepositoryCount,
 }: Readonly<{
 	isManaging: boolean;
 	managingRepositoryCount: number;
 	onClearSelection: () => void;
+	onDiscardChanges: () => void;
 	onEditSettings: () => void;
+	onReviewChanges: () => void;
 	selectedRepositoryCount: number;
+	stagedRepositoryCount: number;
 }>) {
-	if (!isManaging && selectedRepositoryCount === 0) {
+	if (isManaging) {
+		return (
+			<FloatingActionBar
+				className="max-w-xl"
+				message={
+					<>
+						Updating{" "}
+						<Strong>{formatRepositoryCount(managingRepositoryCount)}</Strong>…
+					</>
+				}
+			>
+				<Button disabled>Review changes</Button>
+			</FloatingActionBar>
+		);
+	}
+
+	if (stagedRepositoryCount === 0 && selectedRepositoryCount === 0) {
 		return null;
 	}
 
-	const repositoryCount = isManaging
-		? managingRepositoryCount
-		: selectedRepositoryCount;
-	const repositoryLabel = pluralize(
-		repositoryCount,
-		"repository",
-		"repositories"
-	);
+	const hasSelection = selectedRepositoryCount > 0;
+	const hasStagedChanges = stagedRepositoryCount > 0;
 
 	return (
 		<FloatingActionBar
-			className="max-w-xl"
+			className="max-w-2xl"
 			message={
-				isManaging ? (
-					<>
-						Updating <Strong>{repositoryCount}</Strong> {repositoryLabel}…
-					</>
-				) : (
-					<>
-						<Strong>{repositoryCount}</Strong> {repositoryLabel} selected.
-					</>
-				)
+				<>
+					{hasStagedChanges ? (
+						<>
+							<Strong>{formatRepositoryCount(stagedRepositoryCount)}</Strong>{" "}
+							changed.
+						</>
+					) : null}
+					{hasStagedChanges && hasSelection ? " " : null}
+					{hasSelection ? (
+						<>
+							<Strong>{formatRepositoryCount(selectedRepositoryCount)}</Strong>{" "}
+							selected.
+						</>
+					) : null}
+				</>
 			}
 		>
-			<Button disabled={isManaging} onClick={onEditSettings}>
-				Edit settings
-			</Button>
-			<Button disabled={isManaging} onClick={onClearSelection} outline>
-				Clear selection
-			</Button>
+			{hasStagedChanges ? (
+				<Button onClick={onReviewChanges}>Review changes</Button>
+			) : null}
+			{hasSelection && hasStagedChanges ? (
+				<Button onClick={onEditSettings} outline>
+					Edit settings
+				</Button>
+			) : null}
+			{hasSelection && !hasStagedChanges ? (
+				<Button onClick={onEditSettings}>Edit settings</Button>
+			) : null}
+			{hasStagedChanges ? (
+				<Button onClick={onDiscardChanges} outline>
+					Discard changes
+				</Button>
+			) : null}
+			{hasSelection ? (
+				<Button onClick={onClearSelection} plain>
+					Clear selection
+				</Button>
+			) : null}
 		</FloatingActionBar>
 	);
 }

@@ -24,7 +24,10 @@ import {
 	getManageVisibilityActionOptions,
 	getManageVisibilityTargetOptions,
 	getRepositoryChangeLines,
+	getRepositoryStateActions,
+	mergeStagedActions,
 	showManageResultToast,
+	stageChanges,
 } from "./utils";
 
 let nextRepositoryId = 1;
@@ -488,5 +491,102 @@ describe("showManageResultToast", () => {
 		);
 
 		expect(toast.error).toHaveBeenCalledWith("1 repository failed to update.");
+	});
+});
+
+describe("getRepositoryStateActions", () => {
+	it("maps the current state to action values", () => {
+		const repository = createRepository({
+			archived: true,
+			subscription: "watching",
+			visibility: "private",
+		});
+
+		expect(getRepositoryStateActions(repository)).toEqual({
+			archiveAction: "archived",
+			subscriptionAction: "watching",
+			visibilityAction: "private",
+		});
+	});
+
+	it("leaves an unknown subscription as current", () => {
+		expect(
+			getRepositoryStateActions(createRepository({ subscription: null }))
+				.subscriptionAction
+		).toBe("current");
+	});
+});
+
+describe("mergeStagedActions", () => {
+	it("stages a setting that differs from the current state", () => {
+		const repository = createRepository({ visibility: "public" });
+
+		expect(
+			mergeStagedActions(repository, undefined, { visibilityAction: "private" })
+		).toEqual({
+			archiveAction: "current",
+			subscriptionAction: "current",
+			visibilityAction: "private",
+		});
+	});
+
+	it("keeps earlier staged settings when another is added", () => {
+		const repository = createRepository({ archived: false });
+		const staged = mergeStagedActions(repository, undefined, {
+			visibilityAction: "private",
+		});
+
+		expect(
+			mergeStagedActions(repository, staged ?? undefined, {
+				archiveAction: "archived",
+			})
+		).toEqual({
+			archiveAction: "archived",
+			subscriptionAction: "current",
+			visibilityAction: "private",
+		});
+	});
+
+	it("returns null when the change restores the current state", () => {
+		const repository = createRepository({ visibility: "public" });
+		const staged = mergeStagedActions(repository, undefined, {
+			visibilityAction: "private",
+		});
+
+		expect(
+			mergeStagedActions(repository, staged ?? undefined, {
+				visibilityAction: "public",
+			})
+		).toBeNull();
+	});
+});
+
+describe("stageChanges", () => {
+	it("adds, replaces, and removes entries per repository", () => {
+		const alpha = createRepository({ name: "alpha", visibility: "public" });
+		const beta = createRepository({ name: "beta", visibility: "private" });
+		const staged = stageChanges(new Map(), [alpha, beta], {
+			visibilityAction: "private",
+		});
+
+		expect([...staged.keys()]).toEqual(["alpha"]);
+
+		const reverted = stageChanges(staged, [alpha], {
+			visibilityAction: "public",
+		});
+
+		expect(reverted.size).toBe(0);
+	});
+
+	it("keeps untouched entries by identity", () => {
+		const alpha = createRepository({ archived: false, name: "alpha" });
+		const beta = createRepository({ archived: false, name: "beta" });
+		const staged = stageChanges(new Map(), [alpha], {
+			archiveAction: "archived",
+		});
+		const next = stageChanges(staged, [beta], { archiveAction: "archived" });
+
+		expect(next.get("alpha")).toBe(staged.get("alpha"));
+		expect(next.size).toBe(2);
 	});
 });

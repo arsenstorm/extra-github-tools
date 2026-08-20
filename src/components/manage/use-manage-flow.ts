@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { getFailedRepositoryNames } from "@/components/repositories/list-utils";
 import {
 	type RepositoryListState,
@@ -18,10 +18,13 @@ import {
 	createManageChangeInput,
 	hasChangedSetting,
 	hasManageAction,
+	type StagedChanges,
 	showManageResultToast,
+	stageChanges,
 } from "./utils";
 
 const MANAGE_CHUNK_SIZE = 10;
+const EMPTY_STAGED_CHANGES: StagedChanges = new Map();
 
 const chunk = <Item>(items: Item[], size: number): Item[][] => {
 	const chunks: Item[][] = [];
@@ -33,28 +36,46 @@ const chunk = <Item>(items: Item[], size: number): Item[][] => {
 	return chunks;
 };
 
+interface ChunkedRun {
+	error: string | null;
+	results: ManageRepositoryResult[];
+}
+
 export interface ManageFlow {
-	actions: ManageRepositoryActions;
-	closeEditDialog: () => void;
+	/** Actions picked in the bulk edit form. */
+	bulkActions: ManageRepositoryActions;
+	/** Repositories the bulk edit form applies to. */
+	bulkEditRepositories: GitHubRepository[];
+	closeBulkEdit: () => void;
+	closeReview: () => void;
 	confirmationValue: string;
-	editDialogRepositories: GitHubRepository[];
-	isEditDialogOpen: boolean;
+	discardChanges: () => void;
+	isBulkEditOpen: boolean;
 	isManaging: boolean;
+	isReviewing: boolean;
 	list: RepositoryListState;
 	manageResults: ManageRepositoryResult[] | null;
 	managingRepositoryCount: number;
-	openEditDialog: (repositoryNames: string[]) => void;
+	openBulkEdit: (repositoryNames: string[]) => void;
+	openReview: () => void;
 	pendingRepositories: Set<string>;
-	previewChange: (
+	resultsByRepository: Map<string, ManageRepositoryResult>;
+	retryFailedRepositories: () => void;
+	runStagedChanges: () => Promise<void>;
+	setBulkActions: (actions: ManageRepositoryActions) => void;
+	setConfirmationValue: (value: string) => void;
+	setManageResults: (results: ManageRepositoryResult[] | null) => void;
+	/** Stages the bulk form's actions for its repositories and closes the form. */
+	stageBulkEdit: () => void;
+	/** Stages one setting change for a repository; picking its current value unstages it. */
+	stageChange: (
 		repositoryName: string,
 		change: Partial<ManageRepositoryActions>
 	) => void;
-	resultsByRepository: Map<string, ManageRepositoryResult>;
-	retryFailedRepositories: () => void;
-	runEditDialog: () => Promise<void>;
-	setActions: (actions: ManageRepositoryActions) => void;
-	setConfirmationValue: (value: string) => void;
-	setManageResults: (results: ManageRepositoryResult[] | null) => void;
+	stagedChanges: StagedChanges;
+	/** Staged repositories in list order, for the review dialog. */
+	stagedRepositories: GitHubRepository[];
+	unstageRepository: (repositoryName: string) => void;
 }
 
 export function useManageFlow({
@@ -73,33 +94,39 @@ export function useManageFlow({
 	const list = useRepositoryList(repositories, {
 		expectedCount: expectedRepositoryCount,
 	});
-	const [actions, setActions] = useState<ManageRepositoryActions>(
+	const [stagedChanges, setStagedChanges] =
+		useState<StagedChanges>(EMPTY_STAGED_CHANGES);
+	const [bulkActions, setBulkActions] = useState<ManageRepositoryActions>(
 		DEFAULT_MANAGE_ACTIONS
 	);
+	const [bulkEditTargets, setBulkEditTargets] = useState<string[] | null>(null);
 	const [confirmationValue, setConfirmationValue] = useState("");
-	const [editTargets, setEditTargets] = useState<string[] | null>(null);
 	const [isManaging, setIsManaging] = useState(false);
-	const [lastRunActions, setLastRunActions] =
-		useState<ManageRepositoryActions | null>(null);
+	const [isReviewing, setIsReviewing] = useState(false);
+	const [lastRunChanges, setLastRunChanges] =
+		useState<StagedChanges>(EMPTY_STAGED_CHANGES);
 	const [manageResults, setManageResults] = useState<
 		ManageRepositoryResult[] | null
 	>(null);
 	const [pendingRepositories, setPendingRepositories] = useState<string[]>([]);
-	const closingEditTargetsRef = useRef<GitHubRepository[]>([]);
 
-	const editTargetRepositories = useMemo(() => {
-		const editTargetSet = new Set(editTargets ?? []);
-
-		return repositories.filter((repository) =>
-			editTargetSet.has(repository.name)
-		);
-	}, [editTargets, repositories]);
-
-	if (editTargetRepositories.length > 0) {
-		// Keep the closing dialog readable while it fades out.
-		closingEditTargetsRef.current = editTargetRepositories;
-	}
-
+	const repositoriesByName = useMemo(
+		() =>
+			new Map(repositories.map((repository) => [repository.name, repository])),
+		[repositories]
+	);
+	const stagedRepositories = useMemo(
+		() =>
+			repositories.filter((repository) => stagedChanges.has(repository.name)),
+		[repositories, stagedChanges]
+	);
+	const bulkEditRepositories = useMemo(
+		() =>
+			(bulkEditTargets ?? [])
+				.map((name) => repositoriesByName.get(name))
+				.filter((repository) => repository !== undefined),
+		[bulkEditTargets, repositoriesByName]
+	);
 	const pendingRepositorySet = useMemo(
 		() => new Set(pendingRepositories),
 		[pendingRepositories]
@@ -112,50 +139,81 @@ export function useManageFlow({
 		[manageResults]
 	);
 
-	// The actions and confirmation reset when the dialog opens, so closing
-	// leaves the dialog contents alone while it fades out.
-	const openEditDialogWith = useCallback(
-		(targetNames: string[], initialActions: ManageRepositoryActions): void => {
-			setActions(initialActions);
-			setConfirmationValue("");
-			setEditTargets(targetNames);
-		},
-		[]
-	);
-	const openEditDialog = useCallback(
-		(targetNames: string[]): void =>
-			openEditDialogWith(targetNames, DEFAULT_MANAGE_ACTIONS),
-		[openEditDialogWith]
-	);
+	const stageChange = useCallback(
+		(repositoryName: string, change: Partial<ManageRepositoryActions>) => {
+			const repository = repositoriesByName.get(repositoryName);
 
-	const retryFailedRepositories = (): void => {
-		const failedRepositories = getFailedRepositoryNames(manageResults);
+			if (!repository) {
+				return;
+			}
 
-		if (failedRepositories.length > 0) {
-			openEditDialogWith(
-				failedRepositories,
-				lastRunActions ?? DEFAULT_MANAGE_ACTIONS
+			setManageResults(null);
+			setStagedChanges((previous) =>
+				stageChanges(previous, [repository], change)
 			);
-		}
+		},
+		[repositoriesByName]
+	);
+
+	const unstageRepository = (repositoryName: string): void => {
+		setStagedChanges((previous) => {
+			const next = new Map(previous);
+
+			next.delete(repositoryName);
+
+			return next;
+		});
 	};
 
-	/** Opens the dialog for one repository with a change already picked, so it is reviewed before it runs. */
-	const previewChange = useCallback(
-		(
-			repositoryName: string,
-			change: Partial<ManageRepositoryActions>
-		): void => {
-			openEditDialogWith([repositoryName], {
-				...DEFAULT_MANAGE_ACTIONS,
-				...change,
-			});
-		},
-		[openEditDialogWith]
-	);
+	const discardChanges = (): void => {
+		setStagedChanges(EMPTY_STAGED_CHANGES);
+		setIsReviewing(false);
+	};
+
+	const openBulkEdit = useCallback((targetNames: string[]): void => {
+		setBulkActions(DEFAULT_MANAGE_ACTIONS);
+		setBulkEditTargets(targetNames);
+	}, []);
+
+	const stageBulkEdit = (): void => {
+		if (!hasManageAction(bulkActions)) {
+			return;
+		}
+
+		setManageResults(null);
+		setStagedChanges((previous) =>
+			stageChanges(previous, bulkEditRepositories, bulkActions)
+		);
+		setBulkEditTargets(null);
+	};
+
+	const openReview = (): void => {
+		setConfirmationValue("");
+		setIsReviewing(true);
+	};
+
+	const retryFailedRepositories = (): void => {
+		const failedNames = getFailedRepositoryNames(manageResults);
+
+		setStagedChanges((previous) => {
+			const next = new Map(previous);
+
+			for (const name of failedNames) {
+				const actions = lastRunChanges.get(name);
+
+				if (actions) {
+					next.set(name, actions);
+				}
+			}
+
+			return next;
+		});
+		openReview();
+	};
 
 	const runChunks = async (
 		changeInputs: ManageRepositoryChangeInput[]
-	): Promise<{ error: string | null; results: ManageRepositoryResult[] }> => {
+	): Promise<ChunkedRun> => {
 		const results: ManageRepositoryResult[] = [];
 
 		for (const changeChunk of chunk(changeInputs, MANAGE_CHUNK_SIZE)) {
@@ -183,22 +241,26 @@ export function useManageFlow({
 		return { error: null, results };
 	};
 
-	const runEditDialog = async (): Promise<void> => {
-		const changeInputs = (editTargets ?? []).map((repository) =>
-			createManageChangeInput(repository, actions)
+	const runStagedChanges = async (): Promise<void> => {
+		const changeInputs = stagedRepositories.map((repository) =>
+			createManageChangeInput(
+				repository.name,
+				stagedChanges.get(repository.name) ?? DEFAULT_MANAGE_ACTIONS
+			)
 		);
 
-		if (changeInputs.length === 0 || !hasManageAction(actions)) {
+		if (changeInputs.length === 0) {
 			return;
 		}
 
-		setLastRunActions(actions);
-		setEditTargets(null);
+		setLastRunChanges(stagedChanges);
+		setStagedChanges(EMPTY_STAGED_CHANGES);
+		setIsReviewing(false);
 		setIsManaging(true);
 		setManageResults(null);
 		setPendingRepositories(changeInputs.map((change) => change.repository));
 
-		let run: Awaited<ReturnType<typeof runChunks>>;
+		let run: ChunkedRun;
 
 		try {
 			run = await runChunks(changeInputs);
@@ -212,27 +274,32 @@ export function useManageFlow({
 	};
 
 	return {
-		actions,
-		closeEditDialog: () => setEditTargets(null),
+		bulkActions,
+		bulkEditRepositories,
+		closeBulkEdit: () => setBulkEditTargets(null),
+		closeReview: () => setIsReviewing(false),
 		confirmationValue,
-		editDialogRepositories:
-			editTargets === null
-				? closingEditTargetsRef.current
-				: editTargetRepositories,
-		isEditDialogOpen: editTargets !== null,
+		discardChanges,
+		isBulkEditOpen: bulkEditTargets !== null,
 		isManaging,
+		isReviewing,
 		list,
 		manageResults,
 		managingRepositoryCount:
 			pendingRepositories.length + (manageResults?.length ?? 0),
-		openEditDialog,
+		openBulkEdit,
+		openReview,
 		pendingRepositories: pendingRepositorySet,
-		previewChange,
 		resultsByRepository,
 		retryFailedRepositories,
-		runEditDialog,
-		setActions,
+		runStagedChanges,
+		setBulkActions,
 		setConfirmationValue,
 		setManageResults,
+		stageBulkEdit,
+		stageChange,
+		stagedChanges,
+		stagedRepositories,
+		unstageRepository,
 	};
 }

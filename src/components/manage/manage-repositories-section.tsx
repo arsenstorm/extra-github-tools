@@ -12,11 +12,12 @@ import type {
 import { ManageActionBar } from "./manage-action-bar";
 import { ManageEditDialog } from "./manage-edit-dialog";
 import { ManageResultsPanel } from "./manage-results-panel";
+import { ManageReviewDialog } from "./manage-review-dialog";
 import { ManageToolbar } from "./manage-toolbar";
 import { RepositoriesTable } from "./repositories-table";
 import { useManageFlow } from "./use-manage-flow";
 
-/** The loaded repository list for one account: toolbar, table, results, and the edit dialog. */
+/** The loaded repository list for one account: toolbar, table, results, and the edit and review dialogs. */
 export function ManageRepositoriesSection({
 	account,
 	accounts,
@@ -53,10 +54,10 @@ export function ManageRepositoriesSection({
 		[list.selectedRepositories]
 	);
 
-	const { openEditDialog } = flow;
+	const { openBulkEdit } = flow;
 	const editRepository = useCallback(
-		(repositoryName: string) => openEditDialog([repositoryName]),
-		[openEditDialog]
+		(repositoryName: string) => openBulkEdit([repositoryName]),
+		[openBulkEdit]
 	);
 
 	const listTopRef = useRef<HTMLDivElement>(null);
@@ -85,13 +86,14 @@ export function ManageRepositoriesSection({
 					filteredRepositories={list.paginatedRepositories}
 					isManaging={flow.isManaging}
 					onEditRepository={editRepository}
-					onPreviewChange={flow.previewChange}
+					onStageChange={flow.stageChange}
 					onToggle={list.toggleRepository}
 					onToggleAll={list.toggleVisibleRepositories}
 					pendingRepositories={flow.pendingRepositories}
 					placeholderRowCount={list.placeholderRowCount}
 					resultsByRepository={flow.resultsByRepository}
 					selectedRepositories={selectedRepositorySet}
+					stagedChanges={flow.stagedChanges}
 					supportsInternalVisibility={pages.supportsInternalVisibility}
 				/>
 				<RepositoryListPagination
@@ -110,21 +112,33 @@ export function ManageRepositoriesSection({
 				isManaging={flow.isManaging}
 				managingRepositoryCount={flow.managingRepositoryCount}
 				onClearSelection={() => list.setSelectedRepositories([])}
-				onEditSettings={() => flow.openEditDialog(list.selectedRepositories)}
+				onDiscardChanges={flow.discardChanges}
+				onEditSettings={() => flow.openBulkEdit(list.selectedRepositories)}
+				onReviewChanges={flow.openReview}
 				selectedRepositoryCount={list.selectedRepositories.length}
+				stagedRepositoryCount={flow.stagedRepositories.length}
 			/>
 			<ManageEditDialog
 				account={account}
-				actions={flow.actions}
+				actions={flow.bulkActions}
+				onCancel={flow.closeBulkEdit}
+				onChangeActions={flow.setBulkActions}
+				onConfirm={flow.stageBulkEdit}
+				open={flow.isBulkEditOpen}
+				repositories={flow.bulkEditRepositories}
+				supportsInternalVisibility={pages.supportsInternalVisibility}
+			/>
+			<ManageReviewDialog
+				account={account}
 				confirmationValue={flow.confirmationValue}
 				isManaging={flow.isManaging}
-				onCancel={flow.closeEditDialog}
-				onChangeActions={flow.setActions}
+				onCancel={flow.closeReview}
 				onChangeConfirmationValue={flow.setConfirmationValue}
-				onConfirm={flow.runEditDialog}
-				open={flow.isEditDialogOpen}
-				repositories={flow.editDialogRepositories}
-				supportsInternalVisibility={pages.supportsInternalVisibility}
+				onConfirm={flow.runStagedChanges}
+				onUnstageRepository={flow.unstageRepository}
+				open={flow.isReviewing}
+				repositories={flow.stagedRepositories}
+				stagedChanges={flow.stagedChanges}
 			/>
 		</>
 	);
