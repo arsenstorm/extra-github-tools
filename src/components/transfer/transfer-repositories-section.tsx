@@ -70,10 +70,10 @@ export function TransferRepositoriesSection({
 
 	return (
 		<>
-			{/* Paging scrolls back here so each page starts at its top. */}
-			<div className="scroll-mt-6" ref={listTopRef} />
+			{/* Paging scrolls back to the toolbar so each page starts at its top. */}
 			<TransferToolbar
 				accounts={accounts}
+				className="scroll-mt-6"
 				disabled={flow.isTransferring}
 				from={from}
 				onChangeSearch={list.updateSearch}
@@ -81,6 +81,7 @@ export function TransferRepositoriesSection({
 				onPreloadSource={onPreloadSource}
 				onSelectFrom={onSelectFrom}
 				onSelectTo={onSelectTo}
+				ref={listTopRef}
 				search={list.repositorySearch}
 				sort={list.repositorySort}
 				to={to}

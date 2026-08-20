@@ -66,16 +66,17 @@ export function ManageRepositoriesSection({
 
 	return (
 		<>
-			{/* Paging scrolls back here so each page starts at its top. */}
-			<div className="scroll-mt-6" ref={listTopRef} />
+			{/* Paging scrolls back to the toolbar so each page starts at its top. */}
 			<ManageToolbar
 				account={account}
 				accounts={accounts}
+				className="scroll-mt-6"
 				disabled={flow.isManaging}
 				onChangeSearch={list.updateSearch}
 				onChangeSort={list.updateSort}
 				onPreloadAccount={onPreloadAccount}
 				onSelectAccount={onSelectAccount}
+				ref={listTopRef}
 				search={list.repositorySearch}
 				sort={list.repositorySort}
 			/>

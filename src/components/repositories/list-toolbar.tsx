@@ -1,4 +1,5 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/16/solid";
+import clsx from "clsx";
 import { Input, InputGroup } from "@/components/ui/input";
 import { REPOSITORY_SORT_OPTIONS, type RepositorySort } from "./list-types";
 import { RepositorySelect } from "./select";
@@ -9,21 +10,31 @@ const NOOP = (): void => {
 
 export function RepositoryListToolbar({
 	children,
+	className,
 	disabled,
 	onChangeSearch = NOOP,
 	onChangeSort = NOOP,
+	ref,
 	search = "",
 	sort = "default",
 }: Readonly<{
 	children: React.ReactNode;
+	className?: string;
 	disabled: boolean;
 	onChangeSearch?: (value: string) => void;
 	onChangeSort?: (value: RepositorySort) => void;
+	ref?: React.Ref<HTMLDivElement>;
 	search?: string;
 	sort?: RepositorySort;
 }>) {
 	return (
-		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<div
+			className={clsx(
+				"flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+				className
+			)}
+			ref={ref}
+		>
 			<div className="min-w-0 flex-1">{children}</div>
 			<div className="grid gap-3 sm:min-w-lg sm:grid-cols-[minmax(0,1fr)_12rem]">
 				<InputGroup>

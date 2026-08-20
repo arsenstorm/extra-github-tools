@@ -6,6 +6,7 @@ import type { GitHubAccount } from "@/github/types";
 
 export function TransferToolbar({
 	accounts,
+	className,
 	disabled,
 	from,
 	onChangeSearch,
@@ -13,11 +14,13 @@ export function TransferToolbar({
 	onPreloadSource,
 	onSelectFrom,
 	onSelectTo,
+	ref,
 	search,
 	sort,
 	to,
 }: Readonly<{
 	accounts: GitHubAccount[] | null;
+	className?: string;
 	disabled: boolean;
 	from?: string;
 	onChangeSearch?: (value: string) => void;
@@ -25,6 +28,7 @@ export function TransferToolbar({
 	onPreloadSource?: (accountHandle: string) => void;
 	onSelectFrom: (accountHandle: string) => void;
 	onSelectTo: (accountHandle: string) => void;
+	ref?: React.Ref<HTMLDivElement>;
 	search?: string;
 	sort?: RepositorySort;
 	to?: string;
@@ -34,9 +38,11 @@ export function TransferToolbar({
 
 	return (
 		<RepositoryListToolbar
+			className={className}
 			disabled={disabled}
 			onChangeSearch={onChangeSearch}
 			onChangeSort={onChangeSort}
+			ref={ref}
 			search={search}
 			sort={sort}
 		>
