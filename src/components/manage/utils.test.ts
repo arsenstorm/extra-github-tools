@@ -16,6 +16,7 @@ import type {
 	RepositoryVisibility,
 } from "@/github/types";
 import {
+	getArchivedVisibilityWarning,
 	getManageActionsSummary,
 	getManageRepositoryStatus,
 	getManageResultCounts,
@@ -219,6 +220,46 @@ describe("getManageActionsSummary", () => {
 				})
 			)
 		).toBe("make public; watch all activity");
+	});
+});
+
+describe("getArchivedVisibilityWarning", () => {
+	it("warns when an archived repository changes visibility and stays archived", () => {
+		expect(
+			getArchivedVisibilityWarning(
+				createRepository({ archived: true, visibility: "public" }),
+				createActions({ visibilityAction: "private" })
+			)
+		).toContain("archive date");
+	});
+
+	it("stays quiet when the repository is unarchived, active, or keeps its visibility", () => {
+		const archivedPublic = createRepository({
+			archived: true,
+			visibility: "public",
+		});
+
+		expect(
+			getArchivedVisibilityWarning(
+				archivedPublic,
+				createActions({
+					archiveAction: "unarchived",
+					visibilityAction: "private",
+				})
+			)
+		).toBeNull();
+		expect(
+			getArchivedVisibilityWarning(
+				createRepository({ archived: false, visibility: "public" }),
+				createActions({ visibilityAction: "private" })
+			)
+		).toBeNull();
+		expect(
+			getArchivedVisibilityWarning(
+				archivedPublic,
+				createActions({ visibilityAction: "public" })
+			)
+		).toBeNull();
 	});
 });
 

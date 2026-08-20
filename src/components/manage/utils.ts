@@ -211,6 +211,26 @@ export const getRepositoryChangeLines = (
 		getSubscriptionChangeLine(repository, actions),
 	].filter((line): line is string => line !== null);
 
+/**
+ * GitHub only lets an archived repository be unarchived, so a visibility change
+ * unarchives and re-archives it, and GitHub then shows today as the archive date.
+ */
+export const getArchivedVisibilityWarning = (
+	repository: GitHubRepository,
+	actions: ManageRepositoryActions
+): string | null => {
+	const changesVisibility =
+		getVisibilityChangeLine(repository, actions) !== null;
+	const staysArchived =
+		repository.archived && actions.archiveAction !== "unarchived";
+
+	if (!(changesVisibility && staysArchived)) {
+		return null;
+	}
+
+	return "Changing visibility re-archives this repository, so GitHub will show today as its archive date.";
+};
+
 export const getManageVisibilityActionOptions = (
 	supportsInternalVisibility: boolean
 ): ReadonlyArray<{
