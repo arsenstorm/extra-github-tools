@@ -1,12 +1,13 @@
 import { toast } from "sonner";
+import { formatRepositoryCount } from "@/format";
 import type {
 	GitHubRepository,
 	ManageRepositoryActions,
 	ManageRepositoryResult,
 	ManageSettingResult,
-	RepositorySubscriptionState,
 	RepositoryVisibility,
-} from "@/github";
+} from "@/github/types";
+import type { ManageRepositoryChangeInput } from "@/server-functions";
 import {
 	MANAGE_VISIBILITY_ACTION_OPTIONS,
 	MANAGE_VISIBILITY_TARGET_OPTIONS,
@@ -27,7 +28,7 @@ const getSettingResults = (
 	result.subscription,
 ];
 
-const hasChangedSetting = (result: ManageRepositoryResult): boolean =>
+export const hasChangedSetting = (result: ManageRepositoryResult): boolean =>
 	getSettingResults(result).some(
 		(settingResult) => settingResult?.outcome === "changed"
 	);
@@ -138,12 +139,6 @@ export const getManageActionsSummary = (
 	return summaries.join("; ");
 };
 
-export const getRepositorySubscriptionDisplayState = (
-	repositoryName: string,
-	watchedRepositories: Set<string>
-): RepositorySubscriptionState =>
-	watchedRepositories.has(repositoryName) ? "watching" : "unwatching";
-
 const SUBSCRIPTION_STATE_LABELS = {
 	ignoring: "ignoring",
 	unwatching: "not watching",
@@ -185,23 +180,18 @@ const getVisibilityChangeLine = (
 
 const getSubscriptionChangeLine = (
 	repository: GitHubRepository,
-	actions: ManageRepositoryActions,
-	watchedRepositories: Set<string> | null
+	actions: ManageRepositoryActions
 ): string | null => {
 	if (actions.subscriptionAction === "current") {
 		return null;
 	}
 
 	const targetLabel = SUBSCRIPTION_STATE_LABELS[actions.subscriptionAction];
+	const currentState = repository.subscription;
 
-	if (!watchedRepositories) {
+	if (currentState === null) {
 		return `Notifications: set to ${targetLabel}`;
 	}
-
-	const currentState = getRepositorySubscriptionDisplayState(
-		repository.name,
-		watchedRepositories
-	);
 
 	if (actions.subscriptionAction === currentState) {
 		return null;
@@ -212,13 +202,12 @@ const getSubscriptionChangeLine = (
 
 export const getRepositoryChangeLines = (
 	repository: GitHubRepository,
-	actions: ManageRepositoryActions,
-	watchedRepositories: Set<string> | null
+	actions: ManageRepositoryActions
 ): string[] =>
 	[
 		getArchiveChangeLine(repository, actions),
 		getVisibilityChangeLine(repository, actions),
-		getSubscriptionChangeLine(repository, actions, watchedRepositories),
+		getSubscriptionChangeLine(repository, actions),
 	].filter((line): line is string => line !== null);
 
 export const getManageVisibilityActionOptions = (
@@ -263,12 +252,6 @@ export const getManageRepositoryStatus = (
 	return hasChangedSetting(result) ? "updated" : "unchanged";
 };
 
-const getCountLabel = (
-	count: number,
-	singularLabel: string,
-	pluralLabel: string
-): string => `${count} ${count === 1 ? singularLabel : pluralLabel}`;
-
 export const showManageResultToast = (
 	results: ManageRepositoryResult[],
 	runError: string | null
@@ -278,33 +261,45 @@ export const showManageResultToast = (
 	if (runError) {
 		toast.error(
 			results.length > 0
-				? `${runError} ${getCountLabel(
-						changedCount,
-						"repository",
-						"repositories"
-					)} updated before the run stopped.`
+				? `${runError} ${formatRepositoryCount(changedCount)} updated before the run stopped.`
 				: runError
 		);
 		return;
 	}
 
 	if (failedCount > 0) {
-		toast.error(
-			`${getCountLabel(
-				failedCount,
-				"repository",
-				"repositories"
-			)} failed to update.`
-		);
+		toast.error(`${formatRepositoryCount(failedCount)} failed to update.`);
 		return;
 	}
 
 	if (changedCount > 0) {
-		toast.success(
-			`${getCountLabel(changedCount, "repository", "repositories")} updated.`
-		);
+		toast.success(`${formatRepositoryCount(changedCount)} updated.`);
 		return;
 	}
 
 	toast.success("No changes were needed.");
+};
+
+export const hasManageAction = (actions: ManageRepositoryActions): boolean =>
+	Object.values(actions).some((action) => action !== "current");
+
+export const createManageChangeInput = (
+	repository: string,
+	actions: ManageRepositoryActions
+): ManageRepositoryChangeInput => {
+	const changeInput: ManageRepositoryChangeInput = { repository };
+
+	if (actions.archiveAction !== "current") {
+		changeInput.archiveAction = actions.archiveAction;
+	}
+
+	if (actions.subscriptionAction !== "current") {
+		changeInput.subscriptionAction = actions.subscriptionAction;
+	}
+
+	if (actions.visibilityAction !== "current") {
+		changeInput.visibilityAction = actions.visibilityAction;
+	}
+
+	return changeInput;
 };

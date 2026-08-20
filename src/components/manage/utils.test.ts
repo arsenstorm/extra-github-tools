@@ -14,7 +14,7 @@ import type {
 	ManageRepositoryResult,
 	ManageSettingResult,
 	RepositoryVisibility,
-} from "@/github";
+} from "@/github/types";
 import {
 	getManageActionsSummary,
 	getManageRepositoryStatus,
@@ -24,7 +24,6 @@ import {
 	getManageVisibilityActionOptions,
 	getManageVisibilityTargetOptions,
 	getRepositoryChangeLines,
-	getRepositorySubscriptionDisplayState,
 	showManageResultToast,
 } from "./utils";
 
@@ -47,6 +46,7 @@ const createRepository = (
 		name,
 		private: visibility !== "public",
 		pushedAt: null,
+		subscription: null,
 		...overrides,
 		visibility,
 	};
@@ -219,24 +219,10 @@ describe("getManageActionsSummary", () => {
 	});
 });
 
-describe("getRepositorySubscriptionDisplayState", () => {
-	it("reports watching for a watched repository", () => {
-		expect(
-			getRepositorySubscriptionDisplayState("repo", new Set(["repo"]))
-		).toBe("watching");
-	});
-
-	it("reports unwatching for a repository that is not watched", () => {
-		expect(getRepositorySubscriptionDisplayState("repo", new Set())).toBe(
-			"unwatching"
-		);
-	});
-});
-
 describe("getRepositoryChangeLines", () => {
 	it("returns no lines when every action keeps the current value", () => {
 		expect(
-			getRepositoryChangeLines(createRepository(), createActions(), new Set())
+			getRepositoryChangeLines(createRepository(), createActions())
 		).toEqual([]);
 	});
 
@@ -244,6 +230,7 @@ describe("getRepositoryChangeLines", () => {
 		const repository = createRepository({
 			archived: false,
 			name: "repo",
+			subscription: "watching",
 			visibility: "private",
 		});
 
@@ -254,8 +241,7 @@ describe("getRepositoryChangeLines", () => {
 					archiveAction: "archived",
 					subscriptionAction: "ignoring",
 					visibilityAction: "public",
-				}),
-				new Set(["repo"])
+				})
 			)
 		).toEqual([
 			"Archived: no → yes",
@@ -268,8 +254,7 @@ describe("getRepositoryChangeLines", () => {
 		expect(
 			getRepositoryChangeLines(
 				createRepository({ archived: true, name: "repo" }),
-				createActions({ archiveAction: "unarchived" }),
-				new Set()
+				createActions({ archiveAction: "unarchived" })
 			)
 		).toEqual(["Archived: yes → no"]);
 	});
@@ -278,8 +263,7 @@ describe("getRepositoryChangeLines", () => {
 		expect(
 			getRepositoryChangeLines(
 				createRepository({ archived: true, name: "repo" }),
-				createActions({ archiveAction: "archived" }),
-				new Set()
+				createActions({ archiveAction: "archived" })
 			)
 		).toEqual([]);
 	});
@@ -288,8 +272,7 @@ describe("getRepositoryChangeLines", () => {
 		expect(
 			getRepositoryChangeLines(
 				createRepository({ name: "repo", visibility: "private" }),
-				createActions({ visibilityAction: "private" }),
-				new Set()
+				createActions({ visibilityAction: "private" })
 			)
 		).toEqual([]);
 	});
@@ -297,44 +280,40 @@ describe("getRepositoryChangeLines", () => {
 	it("labels the unwatching action as not watching", () => {
 		expect(
 			getRepositoryChangeLines(
-				createRepository({ name: "repo" }),
-				createActions({ subscriptionAction: "unwatching" }),
-				new Set(["repo"])
+				createRepository({ name: "repo", subscription: "watching" }),
+				createActions({ subscriptionAction: "unwatching" })
 			)
 		).toEqual(["Notifications: watching → not watching"]);
 	});
 
-	it("reads the current notification state from the watched set", () => {
+	it("reads the current notification state from the repository", () => {
 		expect(
 			getRepositoryChangeLines(
-				createRepository({ name: "repo" }),
-				createActions({ subscriptionAction: "watching" }),
-				new Set()
+				createRepository({ name: "repo", subscription: "unwatching" }),
+				createActions({ subscriptionAction: "watching" })
 			)
 		).toEqual(["Notifications: not watching → watching"]);
 	});
 
-	it("omits the notification line when the display state already matches", () => {
+	it("omits the notification line when the subscription already matches", () => {
 		expect(
 			getRepositoryChangeLines(
-				createRepository({ name: "repo" }),
-				createActions({ subscriptionAction: "unwatching" }),
-				new Set()
+				createRepository({ name: "repo", subscription: "unwatching" }),
+				createActions({ subscriptionAction: "unwatching" })
 			)
 		).toEqual([]);
 	});
 
-	it("states the notification target without a before state when the watched set is unknown", () => {
+	it("states the notification target without a before state when the subscription is unknown", () => {
 		expect(
 			getRepositoryChangeLines(
 				createRepository({ name: "repo" }),
-				createActions({ subscriptionAction: "unwatching" }),
-				null
+				createActions({ subscriptionAction: "unwatching" })
 			)
 		).toEqual(["Notifications: set to not watching"]);
 	});
 
-	it("keeps the other lines comparable when the watched set is unknown", () => {
+	it("keeps the other lines comparable when the subscription is unknown", () => {
 		expect(
 			getRepositoryChangeLines(
 				createRepository({
@@ -346,8 +325,7 @@ describe("getRepositoryChangeLines", () => {
 					archiveAction: "archived",
 					subscriptionAction: "ignoring",
 					visibilityAction: "public",
-				}),
-				null
+				})
 			)
 		).toEqual([
 			"Visibility: private → public",
@@ -355,9 +333,9 @@ describe("getRepositoryChangeLines", () => {
 		]);
 	});
 
-	it("returns no lines for an unknown watched set when notifications keep the current value", () => {
+	it("returns no lines for an unknown subscription when notifications keep the current value", () => {
 		expect(
-			getRepositoryChangeLines(createRepository(), createActions(), null)
+			getRepositoryChangeLines(createRepository(), createActions())
 		).toEqual([]);
 	});
 });

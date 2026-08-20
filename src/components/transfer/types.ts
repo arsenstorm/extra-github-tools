@@ -1,7 +1,7 @@
 import type {
 	TransferRepositoryArchiveState,
 	TransferRepositoryVisibility,
-} from "@/github";
+} from "@/github/types";
 
 export type RepositoryStatus = "failed" | "idle" | "pending" | "transferred";
 
@@ -11,6 +11,13 @@ export interface RepositoryTransferOptions {
 	nameSuffix: string;
 	visibility: TransferRepositoryVisibility;
 }
+
+export const DEFAULT_TRANSFER_OPTIONS: RepositoryTransferOptions = {
+	archiveState: "current",
+	namePrefix: "",
+	nameSuffix: "",
+	visibility: "current",
+};
 
 export const REPOSITORY_VISIBILITY_OPTIONS = [
 	{

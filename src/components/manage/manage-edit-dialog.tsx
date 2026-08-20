@@ -1,4 +1,11 @@
-import { CONFIRMATION_REQUIRED_REPOSITORY_COUNT } from "@/components/repositories/list-types";
+import {
+	ConfirmationField,
+	requiresRepositoryConfirmation,
+} from "@/components/repositories/confirmation-field";
+import {
+	RepositoryPreviewItem,
+	RepositoryPreviewList,
+} from "@/components/repositories/preview-list";
 import { RepositorySelect } from "@/components/repositories/select";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,16 +15,10 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import { Description, Field, Fieldset, Label } from "@/components/ui/fieldset";
-import { Input } from "@/components/ui/input";
+import { Field, Fieldset, Label } from "@/components/ui/fieldset";
 import { Strong, Text } from "@/components/ui/text";
-import type {
-	GitHubRepository,
-	ManageRepositoryActions,
-	ManageRepositoryArchiveAction,
-	ManageRepositorySubscriptionAction,
-	ManageRepositoryVisibilityAction,
-} from "@/github";
+import { formatRepositoryCount } from "@/format";
+import type { GitHubRepository, ManageRepositoryActions } from "@/github/types";
 import {
 	MANAGE_ARCHIVE_ACTION_OPTIONS,
 	MANAGE_SUBSCRIPTION_ACTION_OPTIONS,
@@ -26,6 +27,7 @@ import {
 	getManageActionsSummary,
 	getManageVisibilityActionOptions,
 	getRepositoryChangeLines,
+	hasManageAction,
 } from "./utils";
 
 export function ManageEditDialog({
@@ -34,131 +36,93 @@ export function ManageEditDialog({
 	confirmationValue,
 	isManaging,
 	onCancel,
-	onChangeArchiveAction,
+	onChangeActions,
 	onChangeConfirmationValue,
-	onChangeSubscriptionAction,
-	onChangeVisibilityAction,
 	onConfirm,
 	open,
 	repositories,
 	supportsInternalVisibility,
-	watchedRepositories,
 }: Readonly<{
 	account: string;
 	actions: ManageRepositoryActions;
 	confirmationValue: string;
 	isManaging: boolean;
 	onCancel: () => void;
-	onChangeArchiveAction: (value: ManageRepositoryArchiveAction) => void;
+	onChangeActions: (actions: ManageRepositoryActions) => void;
 	onChangeConfirmationValue: (value: string) => void;
-	onChangeSubscriptionAction: (
-		value: ManageRepositorySubscriptionAction
-	) => void;
-	onChangeVisibilityAction: (value: ManageRepositoryVisibilityAction) => void;
 	onConfirm: () => void;
 	open: boolean;
 	repositories: GitHubRepository[];
 	supportsInternalVisibility: boolean;
-	watchedRepositories: Set<string> | null;
 }>) {
-	const actionsSummary = getManageActionsSummary(actions);
-	const hasChosenAction = actionsSummary.length > 0;
-	const requiresConfirmation =
-		repositories.length >= CONFIRMATION_REQUIRED_REPOSITORY_COUNT;
-	const canConfirm =
-		hasChosenAction &&
-		!isManaging &&
-		(!requiresConfirmation || confirmationValue === account);
+	const hasChosenAction = hasManageAction(actions);
+	const requiresConfirmation = requiresRepositoryConfirmation(
+		repositories.length
+	);
+	const isConfirmed = !requiresConfirmation || confirmationValue === account;
+	const canConfirm = hasChosenAction && !isManaging && isConfirmed;
 
 	return (
 		<Dialog onClose={onCancel} open={open} size="xl">
 			<DialogTitle>Edit repository settings</DialogTitle>
 			<DialogDescription>
-				Changes apply to {repositories.length}{" "}
-				{repositories.length === 1 ? "repository" : "repositories"} in{" "}
+				Changes apply to {formatRepositoryCount(repositories.length)} in{" "}
 				<Strong>{account}</Strong>.
 			</DialogDescription>
 			<Fieldset className="mt-6">
 				<div className="grid gap-4 sm:grid-cols-3">
-					<Field>
-						<Label>Archived state</Label>
-						<RepositorySelect<ManageRepositoryArchiveAction>
-							ariaLabel="Archived state"
-							disabled={isManaging}
-							onChange={onChangeArchiveAction}
-							options={MANAGE_ARCHIVE_ACTION_OPTIONS}
-							value={actions.archiveAction}
-						/>
-					</Field>
-					<Field>
-						<Label>Visibility</Label>
-						<RepositorySelect<ManageRepositoryVisibilityAction>
-							ariaLabel="Visibility"
-							disabled={isManaging}
-							onChange={onChangeVisibilityAction}
-							options={getManageVisibilityActionOptions(
-								supportsInternalVisibility
-							)}
-							value={actions.visibilityAction}
-						/>
-					</Field>
-					<Field>
-						<Label>Notifications</Label>
-						<RepositorySelect<ManageRepositorySubscriptionAction>
-							ariaLabel="Notifications"
-							disabled={isManaging}
-							onChange={onChangeSubscriptionAction}
-							options={MANAGE_SUBSCRIPTION_ACTION_OPTIONS}
-							value={actions.subscriptionAction}
-						/>
-					</Field>
+					<ActionField
+						actionKey="archiveAction"
+						actions={actions}
+						disabled={isManaging}
+						label="Archived state"
+						onChange={onChangeActions}
+						options={MANAGE_ARCHIVE_ACTION_OPTIONS}
+					/>
+					<ActionField
+						actionKey="visibilityAction"
+						actions={actions}
+						disabled={isManaging}
+						label="Visibility"
+						onChange={onChangeActions}
+						options={getManageVisibilityActionOptions(
+							supportsInternalVisibility
+						)}
+					/>
+					<ActionField
+						actionKey="subscriptionAction"
+						actions={actions}
+						disabled={isManaging}
+						label="Notifications"
+						onChange={onChangeActions}
+						options={MANAGE_SUBSCRIPTION_ACTION_OPTIONS}
+					/>
 				</div>
 			</Fieldset>
 			<DialogBody>
 				<Text className="mb-3">
 					{hasChosenAction
-						? `This will ${actionsSummary}.`
+						? `This will ${getManageActionsSummary(actions)}.`
 						: "Pick at least one setting to change."}
 				</Text>
-				<ul className="divide-y divide-zinc-950/10 rounded-lg border border-zinc-950/10 dark:divide-white/10 dark:border-white/10">
-					{repositories.map((repository) => {
-						const changeLines = getRepositoryChangeLines(
-							repository,
-							actions,
-							watchedRepositories
-						);
-
-						return (
-							<li className="px-3 py-2" key={repository.id}>
-								<Strong>{repository.name}</Strong>
-								{changeLines.length > 0 ? (
-									changeLines.map((changeLine) => (
-										<Text className="mt-1" key={changeLine}>
-											{changeLine}
-										</Text>
-									))
-								) : (
-									<Text className="mt-1">No change needed.</Text>
-								)}
-							</li>
-						);
-					})}
-				</ul>
-				{requiresConfirmation ? (
-					<Field className="mt-4">
-						<Label>Type {account} to confirm</Label>
-						<Input
-							disabled={isManaging}
-							onChange={(event) =>
-								onChangeConfirmationValue(event.target.value)
-							}
-							value={confirmationValue}
+				<RepositoryPreviewList>
+					{repositories.map((repository) => (
+						<RepositoryChangePreview
+							actions={actions}
+							key={repository.id}
+							repository={repository}
 						/>
-						<Description>
-							This confirmation is required for runs of{" "}
-							{CONFIRMATION_REQUIRED_REPOSITORY_COUNT} or more repositories.
-						</Description>
-					</Field>
+					))}
+				</RepositoryPreviewList>
+				{requiresConfirmation ? (
+					<ConfirmationField
+						account={account}
+						className="mt-4"
+						disabled={isManaging}
+						onChange={onChangeConfirmationValue}
+						runNoun="runs"
+						value={confirmationValue}
+					/>
 				) : null}
 			</DialogBody>
 			<DialogActions>
@@ -170,5 +134,61 @@ export function ManageEditDialog({
 				</Button>
 			</DialogActions>
 		</Dialog>
+	);
+}
+
+function ActionField<Key extends keyof ManageRepositoryActions>({
+	actionKey,
+	actions,
+	disabled,
+	label,
+	onChange,
+	options,
+}: Readonly<{
+	actionKey: Key;
+	actions: ManageRepositoryActions;
+	disabled: boolean;
+	label: string;
+	onChange: (actions: ManageRepositoryActions) => void;
+	options: ReadonlyArray<{
+		label: string;
+		value: ManageRepositoryActions[Key];
+	}>;
+}>) {
+	return (
+		<Field>
+			<Label>{label}</Label>
+			<RepositorySelect<ManageRepositoryActions[Key]>
+				ariaLabel={label}
+				disabled={disabled}
+				onChange={(value) => onChange({ ...actions, [actionKey]: value })}
+				options={options}
+				value={actions[actionKey]}
+			/>
+		</Field>
+	);
+}
+
+function RepositoryChangePreview({
+	actions,
+	repository,
+}: Readonly<{
+	actions: ManageRepositoryActions;
+	repository: GitHubRepository;
+}>) {
+	const changeLines = getRepositoryChangeLines(repository, actions);
+
+	return (
+		<RepositoryPreviewItem name={repository.name}>
+			{changeLines.length > 0 ? (
+				changeLines.map((changeLine) => (
+					<Text className="mt-1" key={changeLine}>
+						{changeLine}
+					</Text>
+				))
+			) : (
+				<Text className="mt-1">No change needed.</Text>
+			)}
+		</RepositoryPreviewItem>
 	);
 }

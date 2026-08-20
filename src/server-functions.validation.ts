@@ -9,12 +9,13 @@ import {
 	TRANSFER_REPOSITORY_VISIBILITIES,
 	type TransferRepositoryArchiveState,
 	type TransferRepositoryVisibility,
-} from "./github";
+} from "./github/types";
 import type {
 	FameSearchInput,
+	GitHubAccountsInput,
 	ManageRepositoriesInput,
 	ManageRepositoryChangeInput,
-	ManageSearchInput,
+	RepositoriesPageInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
 } from "./server-functions";
@@ -134,13 +135,36 @@ export const validateTransferRepositoriesInput = (
 	};
 };
 
-export const validateManageSearchInput = (
-	data: ManageSearchInput
-): ManageSearchInput => {
-	const input = toUnknownRecord<ManageSearchInput>(data);
+const toViewer = (value: unknown): GitHubAccountsInput["viewer"] => {
+	const viewer =
+		toUnknownRecord<NonNullable<GitHubAccountsInput["viewer"]>>(value);
+	const login = normalizeOptionalString(viewer.login);
+	const avatarUrl = normalizeOptionalString(viewer.avatarUrl);
+
+	if (!(login && avatarUrl && typeof viewer.id === "number")) {
+		return;
+	}
+
+	return { avatarUrl, id: viewer.id, login };
+};
+
+export const validateGitHubAccountsInput = (
+	data: GitHubAccountsInput | undefined
+): GitHubAccountsInput => {
+	const input = toUnknownRecord<GitHubAccountsInput>(data);
+
+	return { viewer: toViewer(input.viewer) };
+};
+
+export const validateRepositoriesPageInput = (
+	data: RepositoriesPageInput
+): RepositoriesPageInput => {
+	const input = toUnknownRecord<RepositoriesPageInput>(data);
 
 	return {
-		account: normalizeOptionalString(input.account),
+		account: toTrimmedString(input.account),
+		cursor: normalizeOptionalString(input.cursor),
+		viewerLogin: normalizeOptionalString(input.viewerLogin),
 	};
 };
 

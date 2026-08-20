@@ -1,4 +1,11 @@
-import { CONFIRMATION_REQUIRED_REPOSITORY_COUNT } from "@/components/repositories/list-types";
+import {
+	ConfirmationField,
+	requiresRepositoryConfirmation,
+} from "@/components/repositories/confirmation-field";
+import {
+	RepositoryPreviewItem,
+	RepositoryPreviewList,
+} from "@/components/repositories/preview-list";
 import { RepositorySelect } from "@/components/repositories/select";
 import { Button } from "@/components/ui/button";
 import {
@@ -8,20 +15,15 @@ import {
 	DialogDescription,
 	DialogTitle,
 } from "@/components/ui/dialog";
-import {
-	Description,
-	Field,
-	FieldGroup,
-	Fieldset,
-	Label,
-} from "@/components/ui/fieldset";
+import { Field, FieldGroup, Fieldset, Label } from "@/components/ui/fieldset";
 import { Input } from "@/components/ui/input";
 import { Strong, Text } from "@/components/ui/text";
+import { formatRepositoryCount } from "@/format";
 import type {
 	GitHubRepository,
 	TransferRepositoryArchiveState,
 	TransferRepositoryVisibility,
-} from "@/github";
+} from "@/github/types";
 import {
 	REPOSITORY_ARCHIVE_STATE_OPTIONS,
 	REPOSITORY_VISIBILITY_OPTIONS,
@@ -33,78 +35,55 @@ import {
 } from "./utils";
 
 export function TransferConfirmDialog({
-	archiveState,
 	confirmationValue,
 	from,
 	isTransferring,
-	namePrefix,
-	nameSuffix,
 	onCancel,
-	onChangeArchiveState,
 	onChangeConfirmationValue,
-	onChangeNamePrefix,
-	onChangeNameSuffix,
-	onChangeVisibility,
+	onChangeOptions,
 	onConfirm,
 	open,
+	options,
 	repositories,
-	selectedRepositories,
 	to,
-	visibility,
 }: Readonly<{
-	archiveState: TransferRepositoryArchiveState;
 	confirmationValue: string;
 	from: string;
 	isTransferring: boolean;
-	namePrefix: string;
-	nameSuffix: string;
 	onCancel: () => void;
-	onChangeArchiveState: (value: TransferRepositoryArchiveState) => void;
 	onChangeConfirmationValue: (value: string) => void;
-	onChangeNamePrefix: (value: string) => void;
-	onChangeNameSuffix: (value: string) => void;
-	onChangeVisibility: (value: TransferRepositoryVisibility) => void;
+	onChangeOptions: (options: RepositoryTransferOptions) => void;
 	onConfirm: () => void;
 	open: boolean;
+	options: RepositoryTransferOptions;
 	repositories: GitHubRepository[];
-	selectedRepositories: string[];
 	to: string;
-	visibility: TransferRepositoryVisibility;
 }>) {
-	const transferOptions: RepositoryTransferOptions = {
-		archiveState,
-		namePrefix,
-		nameSuffix,
-		visibility,
-	};
-	const selectedRepositorySet = new Set(selectedRepositories);
-	const selectedRepositoryRows = repositories.filter((repository) =>
-		selectedRepositorySet.has(repository.name)
-	);
 	const hasPostTransferSettings =
-		visibility !== "current" || archiveState !== "current";
-	const requiresConfirmation =
-		selectedRepositories.length >= CONFIRMATION_REQUIRED_REPOSITORY_COUNT;
-	const canConfirm =
-		selectedRepositories.length > 0 &&
-		!isTransferring &&
-		(!requiresConfirmation || confirmationValue === to);
+		options.visibility !== "current" || options.archiveState !== "current";
+	const requiresConfirmation = requiresRepositoryConfirmation(
+		repositories.length
+	);
+	const isConfirmed = !requiresConfirmation || confirmationValue === to;
+	const canConfirm = repositories.length > 0 && !isTransferring && isConfirmed;
+
+	const updateOption = <Key extends keyof RepositoryTransferOptions>(
+		key: Key,
+		value: RepositoryTransferOptions[Key]
+	): void => onChangeOptions({ ...options, [key]: value });
 
 	const handleClose = (): void => {
-		if (isTransferring) {
-			return;
+		if (!isTransferring) {
+			onCancel();
 		}
-
-		onCancel();
 	};
 
 	return (
 		<Dialog onClose={handleClose} open={open} size="xl">
 			<DialogTitle>Transfer repositories</DialogTitle>
 			<DialogDescription>
-				You are about to transfer {selectedRepositories.length}{" "}
-				{selectedRepositories.length === 1 ? "repository" : "repositories"} from{" "}
-				<Strong>{from}</Strong> to <Strong>{to}</Strong>.
+				You are about to transfer {formatRepositoryCount(repositories.length)}{" "}
+				from <Strong>{from}</Strong> to <Strong>{to}</Strong>.
 			</DialogDescription>
 			<DialogBody>
 				<Fieldset>
@@ -113,18 +92,22 @@ export function TransferConfirmDialog({
 							<Label>Name prefix</Label>
 							<Input
 								disabled={isTransferring}
-								onChange={(event) => onChangeNamePrefix(event.target.value)}
+								onChange={(event) =>
+									updateOption("namePrefix", event.target.value)
+								}
 								placeholder="archived-"
-								value={namePrefix}
+								value={options.namePrefix}
 							/>
 						</Field>
 						<Field>
 							<Label>Name suffix</Label>
 							<Input
 								disabled={isTransferring}
-								onChange={(event) => onChangeNameSuffix(event.target.value)}
+								onChange={(event) =>
+									updateOption("nameSuffix", event.target.value)
+								}
 								placeholder="-migrated"
-								value={nameSuffix}
+								value={options.nameSuffix}
 							/>
 						</Field>
 						<Field>
@@ -132,9 +115,9 @@ export function TransferConfirmDialog({
 							<RepositorySelect<TransferRepositoryVisibility>
 								ariaLabel="Visibility after transfer"
 								disabled={isTransferring}
-								onChange={onChangeVisibility}
+								onChange={(value) => updateOption("visibility", value)}
 								options={REPOSITORY_VISIBILITY_OPTIONS}
-								value={visibility}
+								value={options.visibility}
 							/>
 						</Field>
 						<Field>
@@ -142,51 +125,43 @@ export function TransferConfirmDialog({
 							<RepositorySelect<TransferRepositoryArchiveState>
 								ariaLabel="Archive state after transfer"
 								disabled={isTransferring}
-								onChange={onChangeArchiveState}
+								onChange={(value) => updateOption("archiveState", value)}
 								options={REPOSITORY_ARCHIVE_STATE_OPTIONS}
-								value={archiveState}
+								value={options.archiveState}
 							/>
 						</Field>
 					</FieldGroup>
 				</Fieldset>
-				<ul className="mt-6 divide-y divide-zinc-950/10 rounded-lg border border-zinc-950/10 dark:divide-white/10 dark:border-white/10">
-					{selectedRepositoryRows.map((repository) => {
+				<RepositoryPreviewList className="mt-6">
+					{repositories.map((repository) => {
 						const transferredRepositoryName = getTransferredRepositoryName(
 							repository.name,
-							transferOptions
+							options
 						);
 
 						return (
-							<li className="px-3 py-2" key={repository.id}>
-								<Strong>{repository.name}</Strong>
+							<RepositoryPreviewItem key={repository.id} name={repository.name}>
 								{transferredRepositoryName === repository.name ? null : (
 									<Text className="mt-1">→ {transferredRepositoryName}</Text>
 								)}
-							</li>
+							</RepositoryPreviewItem>
 						);
 					})}
-				</ul>
+				</RepositoryPreviewList>
 				{hasPostTransferSettings ? (
 					<Text className="mt-4">
-						Post-transfer settings:{" "}
-						{getPostTransferSettingsSummary(transferOptions)}.
+						Post-transfer settings: {getPostTransferSettingsSummary(options)}.
 					</Text>
 				) : null}
 				{requiresConfirmation ? (
-					<Field className="mt-4">
-						<Label>Type {to} to confirm</Label>
-						<Input
-							disabled={isTransferring}
-							onChange={(event) =>
-								onChangeConfirmationValue(event.target.value)
-							}
-							value={confirmationValue}
-						/>
-						<Description>
-							This confirmation is required for transfers of{" "}
-							{CONFIRMATION_REQUIRED_REPOSITORY_COUNT} or more repositories.
-						</Description>
-					</Field>
+					<ConfirmationField
+						account={to}
+						className="mt-4"
+						disabled={isTransferring}
+						onChange={onChangeConfirmationValue}
+						runNoun="transfers"
+						value={confirmationValue}
+					/>
 				) : null}
 			</DialogBody>
 			<DialogActions>

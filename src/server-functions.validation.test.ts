@@ -2,14 +2,14 @@ import { describe, expect, it } from "vitest";
 import type {
 	FameSearchInput,
 	ManageRepositoriesInput,
-	ManageSearchInput,
+	RepositoriesPageInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
 } from "./server-functions";
 import {
 	validateFameSearchInput,
 	validateManageRepositoriesInput,
-	validateManageSearchInput,
+	validateRepositoriesPageInput,
 	validateTransferRepositoriesInput,
 	validateTransferSearchInput,
 } from "./server-functions.validation";
@@ -276,24 +276,28 @@ describe("validateManageRepositoriesInput", () => {
 	});
 });
 
-describe("validateManageSearchInput", () => {
-	it("trims and drops blank values", () => {
-		expect(validateManageSearchInput({ account: " acme " })).toEqual({
-			account: "acme",
-		});
+describe("validateRepositoriesPageInput", () => {
+	it("trims the account and viewer login", () => {
+		expect(
+			validateRepositoriesPageInput({
+				account: " acme ",
+				viewerLogin: " octocat ",
+			})
+		).toEqual({ account: "acme", cursor: undefined, viewerLogin: "octocat" });
 	});
 
 	it("ignores non-string values", () => {
 		expect(
-			validateManageSearchInput({
+			validateRepositoriesPageInput({
 				account: 1,
-			} as unknown as ManageSearchInput)
-		).toEqual({ account: undefined });
+				viewerLogin: 2,
+			} as unknown as RepositoriesPageInput)
+		).toEqual({ account: "", cursor: undefined, viewerLogin: undefined });
 	});
 
 	it("does not throw on non-object input", () => {
 		expect(
-			validateManageSearchInput(null as unknown as ManageSearchInput)
-		).toEqual({ account: undefined });
+			validateRepositoriesPageInput(null as unknown as RepositoriesPageInput)
+		).toEqual({ account: "", cursor: undefined, viewerLogin: undefined });
 	});
 });

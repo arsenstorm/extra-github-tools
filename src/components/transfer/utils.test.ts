@@ -8,7 +8,7 @@ vi.mock("sonner", () => ({
 }));
 
 import { toast } from "sonner";
-import type { TransferRepositoryResult } from "@/github";
+import type { TransferRepositoryResult } from "@/github/types";
 import type { TransferRepositoriesResult } from "@/server-functions";
 import type { RepositoryTransferOptions } from "./types";
 import {

@@ -1,10 +1,11 @@
 import type {
+	ManageRepositoryActions,
 	ManageRepositoryArchiveAction,
 	ManageRepositorySubscriptionAction,
 	ManageRepositoryVisibilityAction,
 	RepositorySubscriptionState,
 	RepositoryVisibility,
-} from "@/github";
+} from "@/github/types";
 
 export type ManageRepositoryArchiveState = Exclude<
 	ManageRepositoryArchiveAction,
@@ -17,6 +18,12 @@ export type ManageRepositoryStatus =
 	| "pending"
 	| "unchanged"
 	| "updated";
+
+export const DEFAULT_MANAGE_ACTIONS: ManageRepositoryActions = {
+	archiveAction: "current",
+	subscriptionAction: "current",
+	visibilityAction: "current",
+};
 
 export const MANAGE_ARCHIVE_ACTION_OPTIONS = [
 	{

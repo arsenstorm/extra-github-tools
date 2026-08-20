@@ -1,8 +1,24 @@
-import { Checkbox } from "@headlessui/react";
 import { CheckIcon, ChevronDownIcon } from "@heroicons/react/16/solid";
-import { type KeyboardEvent, type MouseEvent, useRef } from "react";
+import { memo, useMemo, useState } from "react";
 import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
+import {
+	RepositoryBadge,
+	type RepositoryStatusTone,
+} from "@/components/repositories/badge";
+import { EmptyTableRow } from "@/components/repositories/empty-table-row";
 import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
+import {
+	getVisibleSelection,
+	SelectableRepositoryRow,
+	SelectableRowHeader,
+	stopEventPropagation,
+} from "@/components/repositories/selectable-row";
+import {
+	ACTIONS_COLUMN_CLASS_NAME,
+	SkeletonRows,
+	type TableColumn,
+} from "@/components/repositories/table-skeleton";
+import { Button } from "@/components/ui/button";
 import {
 	Dropdown,
 	DropdownButton,
@@ -21,11 +37,11 @@ import {
 import { Strong, Text } from "@/components/ui/text";
 import type {
 	GitHubRepository,
+	ManageRepositoryActions,
 	ManageRepositoryResult,
 	RepositorySubscriptionState,
 	RepositoryVisibility,
-} from "@/github";
-import type { ManageRepositoryChangeInput } from "@/server-functions";
+} from "@/github/types";
 import {
 	MANAGE_ARCHIVE_TARGET_OPTIONS,
 	MANAGE_SUBSCRIPTION_TARGET_OPTIONS,
@@ -35,113 +51,147 @@ import {
 import {
 	getManageRepositoryStatus,
 	getManageVisibilityTargetOptions,
-	getRepositorySubscriptionDisplayState,
 } from "./utils";
 
-const TABLE_COLUMN_COUNT = 8;
+export const MANAGE_TABLE_COLUMNS: TableColumn[] = [
+	{ label: "Name" },
+	{ className: "w-28", label: "Visibility" },
+	{ className: "w-28", label: "Archived" },
+	{ className: "w-36", label: "Notifications" },
+	{ className: "w-32", label: "Last pushed" },
+	{ className: "w-36", label: "Status" },
+];
+const TABLE_COLUMN_COUNT = MANAGE_TABLE_COLUMNS.length + 2;
+
+const SUBSCRIPTION_STATE_CELL_LABELS: Record<
+	RepositorySubscriptionState,
+	string
+> = {
+	ignoring: "Ignoring",
+	unwatching: "Not watching",
+	watching: "Watching",
+};
+
+const STATUS_BADGES: Record<
+	Exclude<ManageRepositoryStatus, "idle" | "unchanged">,
+	{ label: string; tone: RepositoryStatusTone }
+> = {
+	failed: { label: "Failed", tone: "failed" },
+	pending: { label: "Pending", tone: "pending" },
+	updated: { label: "Updated", tone: "success" },
+};
 
 const capitalize = (value: string): string =>
 	value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 
-const stopEventPropagation = (event: MouseEvent): void =>
-	event.stopPropagation();
-
 export function RepositoriesTable({
 	filteredRepositories,
 	isManaging,
-	onApplyChange,
+	onPreviewChange,
 	onEditRepository,
 	onToggle,
+	onToggleAll,
 	pendingRepositories,
+	placeholderRowCount = 0,
 	resultsByRepository,
 	selectedRepositories,
 	supportsInternalVisibility,
-	watchedRepositories,
 }: Readonly<{
 	filteredRepositories: GitHubRepository[];
 	isManaging: boolean;
-	onApplyChange: (change: ManageRepositoryChangeInput) => void;
+	onPreviewChange: (
+		repositoryName: string,
+		change: Partial<ManageRepositoryActions>
+	) => void;
 	onEditRepository: (repositoryName: string) => void;
 	onToggle: (repositoryName: string, shouldSelectRange?: boolean) => void;
+	onToggleAll: () => void;
 	pendingRepositories: Set<string>;
+	/** Rows to render as skeletons for repositories that are still loading. */
+	placeholderRowCount?: number;
 	resultsByRepository: Map<string, ManageRepositoryResult>;
 	selectedRepositories: Set<string>;
 	supportsInternalVisibility: boolean;
-	watchedRepositories: Set<string> | null;
 }>) {
-	const visibilityOptions = getManageVisibilityTargetOptions(
-		supportsInternalVisibility
+	const visibilityOptions = useMemo(
+		() => getManageVisibilityTargetOptions(supportsInternalVisibility),
+		[supportsInternalVisibility]
+	);
+
+	const visibleSelection = getVisibleSelection(
+		filteredRepositories.map((repository) => repository.name),
+		selectedRepositories
 	);
 
 	return (
-		<div>
-			<Table>
-				<TableHead>
-					<TableRow>
-						<TableHeader className="w-0 pr-2! pl-4!">
-							<span className="sr-only">Select</span>
+		<Table fixed>
+			<TableHead>
+				<TableRow>
+					<SelectableRowHeader
+						disabled={isManaging || filteredRepositories.length === 0}
+						onToggleAll={onToggleAll}
+						selection={visibleSelection}
+					/>
+					{MANAGE_TABLE_COLUMNS.map((column) => (
+						<TableHeader className={column.className} key={column.label}>
+							{column.label}
 						</TableHeader>
-						<TableHeader>Name</TableHeader>
-						<TableHeader>Visibility</TableHeader>
-						<TableHeader>Archived</TableHeader>
-						<TableHeader>Notifications</TableHeader>
-						<TableHeader>Last pushed</TableHeader>
-						<TableHeader>Status</TableHeader>
-						<TableHeader className="w-0">
-							<span className="sr-only">Actions</span>
-						</TableHeader>
-					</TableRow>
-				</TableHead>
-				<TableBody>
-					{filteredRepositories.length > 0 ? (
-						filteredRepositories.map((repository) => (
-							<RepositoryRow
-								isManaging={isManaging}
-								isPending={pendingRepositories.has(repository.name)}
-								isSelected={selectedRepositories.has(repository.name)}
-								key={repository.id}
-								onApplyChange={onApplyChange}
-								onEditRepository={onEditRepository}
-								onToggle={onToggle}
-								repository={repository}
-								status={getManageRepositoryStatus(
-									repository.name,
-									pendingRepositories,
-									resultsByRepository
-								)}
-								visibilityOptions={visibilityOptions}
-								watchedRepositories={watchedRepositories}
-							/>
-						))
-					) : (
-						<TableRow>
-							<TableCell className="text-center" colSpan={TABLE_COLUMN_COUNT}>
-								No repositories found.
-							</TableCell>
-						</TableRow>
-					)}
-				</TableBody>
-			</Table>
-		</div>
+					))}
+					<TableHeader className={ACTIONS_COLUMN_CLASS_NAME}>
+						<span className="sr-only">Actions</span>
+					</TableHeader>
+				</TableRow>
+			</TableHead>
+			<TableBody>
+				{filteredRepositories.map((repository) => (
+					<RepositoryRow
+						isManaging={isManaging}
+						isPending={pendingRepositories.has(repository.name)}
+						isSelected={selectedRepositories.has(repository.name)}
+						key={repository.id}
+						onEditRepository={onEditRepository}
+						onPreviewChange={onPreviewChange}
+						onToggle={onToggle}
+						repository={repository}
+						status={getManageRepositoryStatus(
+							repository.name,
+							pendingRepositories,
+							resultsByRepository
+						)}
+						visibilityOptions={visibilityOptions}
+					/>
+				))}
+				<SkeletonRows
+					columns={MANAGE_TABLE_COLUMNS}
+					count={placeholderRowCount}
+				/>
+				{filteredRepositories.length === 0 && placeholderRowCount === 0 ? (
+					<EmptyTableRow colSpan={TABLE_COLUMN_COUNT} />
+				) : null}
+			</TableBody>
+		</Table>
 	);
 }
 
-function RepositoryRow({
+/** Memoised so selecting or editing one row doesn't re-render the other 99. */
+const RepositoryRow = memo(function RepositoryRowComponent({
 	isManaging,
 	isPending,
 	isSelected,
-	onApplyChange,
+	onPreviewChange,
 	onEditRepository,
 	onToggle,
 	repository,
 	status,
 	visibilityOptions,
-	watchedRepositories,
 }: Readonly<{
 	isManaging: boolean;
 	isPending: boolean;
 	isSelected: boolean;
-	onApplyChange: (change: ManageRepositoryChangeInput) => void;
+	onPreviewChange: (
+		repositoryName: string,
+		change: Partial<ManageRepositoryActions>
+	) => void;
 	onEditRepository: (repositoryName: string) => void;
 	onToggle: (repositoryName: string, shouldSelectRange?: boolean) => void;
 	repository: GitHubRepository;
@@ -150,124 +200,59 @@ function RepositoryRow({
 		label: string;
 		value: RepositoryVisibility;
 	}>;
-	watchedRepositories: Set<string> | null;
 }>) {
-	const checkboxShouldSelectRangeRef = useRef(false);
+	// Menus mount only once the row is hovered, pressed, or focused; until then
+	// the cells render look-alike buttons so a 100-row page paints quickly.
+	const [isInteractive, setIsInteractive] = useState(false);
 	const isEditingDisabled = isManaging || isPending;
-	const subscriptionState = watchedRepositories
-		? getRepositorySubscriptionDisplayState(
-				repository.name,
-				watchedRepositories
-			)
-		: null;
-
-	const handleRowKeyDown = (
-		event: KeyboardEvent<HTMLTableRowElement>
-	): void => {
-		if (event.target !== event.currentTarget) {
-			return;
-		}
-
-		if (isManaging) {
-			return;
-		}
-
-		if (event.key === "Enter" || event.key === " ") {
-			event.preventDefault();
-			onToggle(repository.name, event.shiftKey);
-		}
-	};
+	const subscriptionState = repository.subscription;
 
 	return (
-		<TableRow
-			aria-selected={isSelected}
-			className="cursor-pointer hover:bg-zinc-100 focus-visible:outline-2 focus-visible:outline-blue-500 focus-visible:-outline-offset-2 dark:hover:bg-zinc-800"
-			onClick={(event) => {
-				if (!isManaging) {
-					onToggle(repository.name, event.shiftKey);
-				}
-			}}
-			onKeyDown={handleRowKeyDown}
-			tabIndex={0}
+		<SelectableRepositoryRow
+			disabled={isManaging}
+			isSelected={isSelected}
+			onActivate={() => setIsInteractive(true)}
+			onToggle={onToggle}
+			repositoryName={repository.name}
 		>
-			<TableCell className="pr-2! pl-4!">
-				<Checkbox
-					aria-label={`Select ${repository.name}`}
-					checked={isSelected}
-					className="group block size-4 rounded border-none! bg-white data-checked:bg-zinc-500 data-disabled:opacity-50"
-					disabled={isManaging}
-					onChange={() => {
-						onToggle(repository.name, checkboxShouldSelectRangeRef.current);
-						checkboxShouldSelectRangeRef.current = false;
-					}}
-					onClick={stopEventPropagation}
-					onPointerDown={(event) => {
-						checkboxShouldSelectRangeRef.current = event.shiftKey;
-					}}
-				>
-					<svg
-						aria-hidden="true"
-						className="stroke-white opacity-0 group-data-checked:opacity-100"
-						fill="none"
-						viewBox="0 0 14 14"
-					>
-						<path
-							d="M3 8L6 11L11 3.5"
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-						/>
-					</svg>
-				</Checkbox>
-			</TableCell>
-			<TableCell>
+			<TableCell className="truncate">
 				<Strong>{repository.name}</Strong>
 			</TableCell>
 			<TableCell onClick={stopEventPropagation}>
 				<EditableStateCell<RepositoryVisibility>
 					ariaLabel={`Visibility for ${repository.name}`}
 					disabled={isEditingDisabled}
+					interactive={isInteractive}
 					onSelect={(value) =>
-						onApplyChange({
-							repository: repository.name,
-							visibilityAction: value,
-						})
+						onPreviewChange(repository.name, { visibilityAction: value })
 					}
 					options={visibilityOptions}
 					value={repository.visibility}
 				>
-					<RepositoryBadge>{capitalize(repository.visibility)}</RepositoryBadge>
+					<CellText>{capitalize(repository.visibility)}</CellText>
 				</EditableStateCell>
 			</TableCell>
 			<TableCell onClick={stopEventPropagation}>
 				<EditableStateCell<ManageRepositoryArchiveState>
 					ariaLabel={`Archived state for ${repository.name}`}
 					disabled={isEditingDisabled}
+					interactive={isInteractive}
 					onSelect={(value) =>
-						onApplyChange({
-							archiveAction: value,
-							repository: repository.name,
-						})
+						onPreviewChange(repository.name, { archiveAction: value })
 					}
 					options={MANAGE_ARCHIVE_TARGET_OPTIONS}
 					value={repository.archived ? "archived" : "unarchived"}
 				>
-					{repository.archived ? (
-						<RepositoryBadge>Archived</RepositoryBadge>
-					) : (
-						<CellText>Active</CellText>
-					)}
+					<CellText>{repository.archived ? "Archived" : "Active"}</CellText>
 				</EditableStateCell>
 			</TableCell>
 			<TableCell onClick={stopEventPropagation}>
 				<EditableStateCell<RepositorySubscriptionState>
 					ariaLabel={`Notifications for ${repository.name}`}
 					disabled={isEditingDisabled}
+					interactive={isInteractive}
 					onSelect={(value) =>
-						onApplyChange({
-							repository: repository.name,
-							subscriptionAction: value,
-						})
+						onPreviewChange(repository.name, { subscriptionAction: value })
 					}
 					options={MANAGE_SUBSCRIPTION_TARGET_OPTIONS}
 					value={subscriptionState}
@@ -288,6 +273,7 @@ function RepositoryRow({
 			<TableCell onClick={stopEventPropagation}>
 				<RepositoryActionsMenu
 					htmlUrl={repository.htmlUrl}
+					interactive={isInteractive}
 					repositoryName={repository.name}
 				>
 					<DropdownItem
@@ -298,20 +284,20 @@ function RepositoryRow({
 					</DropdownItem>
 				</RepositoryActionsMenu>
 			</TableCell>
-		</TableRow>
+		</SelectableRepositoryRow>
 	);
-}
+});
 
-const SUBSCRIPTION_STATE_CELL_LABELS = {
-	ignoring: "Ignoring",
-	unwatching: "Not watching",
-	watching: "Watching",
-} as const;
+const STATE_CELL_BUTTON_CLASS_NAME =
+	"group -mx-1.5 gap-x-1.5 px-1.5! py-1! font-normal!";
+const STATE_CELL_CHEVRON_CLASS_NAME =
+	"size-3! text-zinc-400! group-data-hover:text-zinc-600! group-data-open:text-zinc-600! dark:group-data-hover:text-zinc-200! dark:group-data-open:text-zinc-200!";
 
 function EditableStateCell<T extends string>({
 	ariaLabel,
 	children,
 	disabled,
+	interactive,
 	onSelect,
 	options,
 	value,
@@ -319,6 +305,8 @@ function EditableStateCell<T extends string>({
 	ariaLabel: string;
 	children: React.ReactNode;
 	disabled: boolean;
+	/** Whether to mount the real menu; false renders an identical-looking button. */
+	interactive: boolean;
 	onSelect: (value: T) => void;
 	options: ReadonlyArray<{
 		label: string;
@@ -326,17 +314,33 @@ function EditableStateCell<T extends string>({
 	}>;
 	value: T | null;
 }>) {
+	if (!interactive) {
+		return (
+			<Button
+				aria-label={ariaLabel}
+				className={STATE_CELL_BUTTON_CLASS_NAME}
+				disabled={disabled}
+				onClick={stopEventPropagation}
+				plain
+				type="button"
+			>
+				{children}
+				<ChevronDownIcon className={STATE_CELL_CHEVRON_CLASS_NAME} />
+			</Button>
+		);
+	}
+
 	return (
 		<Dropdown>
 			<DropdownButton
 				aria-label={ariaLabel}
-				className="group -mx-1.5 gap-x-1.5 px-1.5! py-1! font-normal!"
+				className={STATE_CELL_BUTTON_CLASS_NAME}
 				disabled={disabled}
 				onClick={stopEventPropagation}
 				plain
 			>
 				{children}
-				<ChevronDownIcon className="size-3! text-zinc-400! opacity-0 group-data-hover:opacity-100 group-data-open:opacity-100" />
+				<ChevronDownIcon className={STATE_CELL_CHEVRON_CLASS_NAME} />
 			</DropdownButton>
 			<DropdownMenu anchor="bottom start">
 				{options.map((option) => (
@@ -369,18 +373,6 @@ function CellText({
 	);
 }
 
-function RepositoryBadge({
-	children,
-}: Readonly<{
-	children: React.ReactNode;
-}>) {
-	return (
-		<span className="inline-flex rounded-md border border-zinc-950/10 px-2 py-1 font-medium text-xs text-zinc-700 dark:border-white/10 dark:text-zinc-300">
-			{children}
-		</span>
-	);
-}
-
 function RepositoryStatusBadge({
 	status,
 }: Readonly<{
@@ -394,25 +386,7 @@ function RepositoryStatusBadge({
 		return <RepositoryBadge>No change needed</RepositoryBadge>;
 	}
 
-	const labelByStatus = {
-		failed: "Failed",
-		pending: "Pending",
-		updated: "Updated",
-	} as const;
-	const classNameByStatus = {
-		failed:
-			"border-red-200 bg-red-50 text-red-700 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300",
-		pending:
-			"border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300",
-		updated:
-			"border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300",
-	} as const;
+	const { label, tone } = STATUS_BADGES[status];
 
-	return (
-		<span
-			className={`inline-flex rounded-md border px-2 py-1 font-medium text-xs ${classNameByStatus[status]}`}
-		>
-			{labelByStatus[status]}
-		</span>
-	);
+	return <RepositoryBadge tone={tone}>{label}</RepositoryBadge>;
 }

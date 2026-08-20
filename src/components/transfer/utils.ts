@@ -1,5 +1,6 @@
 import { toast } from "sonner";
-import type { TransferRepositoryResult } from "@/github";
+import { formatCount, formatRepositoryCount } from "@/format";
+import type { TransferRepositoryResult } from "@/github/types";
 import type { TransferRepositoriesResult } from "@/server-functions";
 import type { RepositoryStatus, RepositoryTransferOptions } from "./types";
 
@@ -94,12 +95,6 @@ export const isTransferResultComplete = (
 	result: TransferRepositoryResult
 ): boolean => result.ok && result.postTransferSettings?.ok !== false;
 
-const getCountLabel = (
-	count: number,
-	singularLabel: string,
-	pluralLabel: string
-): string => `${count} ${count === 1 ? singularLabel : pluralLabel}`;
-
 const getTransferFailureToastMessage = (
 	failedCount: number,
 	settingsFailedCount: number
@@ -108,13 +103,13 @@ const getTransferFailureToastMessage = (
 
 	if (failedCount > 0) {
 		failureMessages.push(
-			`${getCountLabel(failedCount, "repository", "repositories")} failed to transfer`
+			`${formatRepositoryCount(failedCount)} failed to transfer`
 		);
 	}
 
 	if (settingsFailedCount > 0) {
 		failureMessages.push(
-			`${getCountLabel(
+			`${formatCount(
 				settingsFailedCount,
 				"settings update",
 				"settings updates"
@@ -151,13 +146,7 @@ export const showTransferResultToast = (
 		getTransferResultCounts(result);
 
 	if (result.success) {
-		toast.success(
-			`${getCountLabel(
-				transferredCount,
-				"repository",
-				"repositories"
-			)} transferred.`
-		);
+		toast.success(`${formatRepositoryCount(transferredCount)} transferred.`);
 		return;
 	}
 
