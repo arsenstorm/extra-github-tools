@@ -16,6 +16,8 @@ import type {
 	RepositoryVisibility,
 } from "@/github/types";
 import {
+	applyRepositoryStates,
+	getAppliedRepositoryState,
 	getArchivedVisibilityWarning,
 	getManageActionsSummary,
 	getManageRepositoryStatus,
@@ -27,6 +29,7 @@ import {
 	getRepositoryChangeLines,
 	getRepositoryStateActions,
 	mergeStagedActions,
+	pruneAppliedStates,
 	showManageResultToast,
 	stageChanges,
 } from "./utils";
@@ -260,6 +263,49 @@ describe("getArchivedVisibilityWarning", () => {
 				createActions({ visibilityAction: "public" })
 			)
 		).toBeNull();
+	});
+});
+
+describe("applied repository states", () => {
+	it("collects only the settings a run actually changed", () => {
+		expect(
+			getAppliedRepositoryState(
+				createActions({
+					archiveAction: "archived",
+					subscriptionAction: "ignoring",
+					visibilityAction: "private",
+				}),
+				createManageResult({
+					archive: createSettingResult({ outcome: "changed" }),
+					subscription: createSettingResult({ outcome: "failed" }),
+					visibility: createSettingResult({ outcome: "unchanged" }),
+				})
+			)
+		).toEqual({ archived: true });
+		expect(
+			getAppliedRepositoryState(
+				createActions({ visibilityAction: "private" }),
+				createManageResult({
+					visibility: createSettingResult({ outcome: "failed" }),
+				})
+			)
+		).toBeNull();
+	});
+
+	it("overlays applied states and prunes them once the list catches up", () => {
+		const stale = createRepository({ name: "repo", visibility: "public" });
+		const other = createRepository({ name: "other" });
+		const applied = new Map([["repo", { visibility: "private" as const }]]);
+		const overlaid = applyRepositoryStates([stale, other], applied);
+
+		expect(overlaid[0]?.visibility).toBe("private");
+		expect(overlaid[1]).toBe(other);
+		expect(pruneAppliedStates([stale], applied)).toBe(applied);
+
+		const fresh = createRepository({ name: "repo", visibility: "private" });
+
+		expect(applyRepositoryStates([fresh], applied)[0]).toBe(fresh);
+		expect(pruneAppliedStates([fresh], applied).size).toBe(0);
 	});
 });
 

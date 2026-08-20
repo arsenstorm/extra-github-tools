@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getFailedRepositoryNames } from "@/components/repositories/list-utils";
 import {
 	type RepositoryListState,
@@ -15,9 +15,13 @@ import type {
 } from "@/server-functions";
 import { DEFAULT_MANAGE_ACTIONS } from "./types";
 import {
+	type AppliedRepositoryStates,
+	applyRepositoryStates,
 	createManageChangeInput,
+	getAppliedRepositoryState,
 	hasChangedSetting,
 	hasManageAction,
+	pruneAppliedStates,
 	type StagedChanges,
 	showManageResultToast,
 	stageChanges,
@@ -25,6 +29,7 @@ import {
 
 const MANAGE_CHUNK_SIZE = 10;
 const EMPTY_STAGED_CHANGES: StagedChanges = new Map();
+const EMPTY_APPLIED_STATES: AppliedRepositoryStates = new Map();
 
 const chunk = <Item>(items: Item[], size: number): Item[][] => {
 	const chunks: Item[][] = [];
@@ -82,7 +87,7 @@ export function useManageFlow({
 	expectedRepositoryCount,
 	onManageChunk,
 	onRunComplete,
-	repositories,
+	repositories: loadedRepositories,
 }: Readonly<{
 	expectedRepositoryCount: number;
 	onManageChunk: (
@@ -91,6 +96,20 @@ export function useManageFlow({
 	onRunComplete: (didChangeAnything: boolean) => Promise<void>;
 	repositories: GitHubRepository[];
 }>): ManageFlow {
+	// Settings a run changed show at once; the overlay lifts as the refetched list catches up.
+	const [appliedStates, setAppliedStates] =
+		useState<AppliedRepositoryStates>(EMPTY_APPLIED_STATES);
+	const repositories = useMemo(
+		() => applyRepositoryStates(loadedRepositories, appliedStates),
+		[appliedStates, loadedRepositories]
+	);
+
+	useEffect(() => {
+		setAppliedStates((previous) =>
+			pruneAppliedStates(loadedRepositories, previous)
+		);
+	}, [loadedRepositories]);
+
 	const list = useRepositoryList(repositories, {
 		expectedCount: expectedRepositoryCount,
 	});
@@ -211,8 +230,32 @@ export function useManageFlow({
 		openReview();
 	};
 
+	const recordAppliedStates = (
+		chunkResults: ManageRepositoryResult[],
+		changes: StagedChanges
+	): void => {
+		setAppliedStates((previous) => {
+			const next = new Map(previous);
+
+			for (const result of chunkResults) {
+				const actions = changes.get(result.repository);
+				const applied = actions && getAppliedRepositoryState(actions, result);
+
+				if (applied) {
+					next.set(result.repository, {
+						...previous.get(result.repository),
+						...applied,
+					});
+				}
+			}
+
+			return next;
+		});
+	};
+
 	const runChunks = async (
-		changeInputs: ManageRepositoryChangeInput[]
+		changeInputs: ManageRepositoryChangeInput[],
+		changes: StagedChanges
 	): Promise<ChunkedRun> => {
 		const results: ManageRepositoryResult[] = [];
 
@@ -232,6 +275,7 @@ export function useManageFlow({
 			);
 
 			results.push(...chunkResult.results);
+			recordAppliedStates(chunkResult.results, changes);
 			setManageResults([...results]);
 			setPendingRepositories((previousPending) =>
 				previousPending.filter((name) => !chunkRepositories.has(name))
@@ -263,7 +307,7 @@ export function useManageFlow({
 		let run: ChunkedRun;
 
 		try {
-			run = await runChunks(changeInputs);
+			run = await runChunks(changeInputs, stagedChanges);
 		} finally {
 			setPendingRepositories([]);
 			setIsManaging(false);
