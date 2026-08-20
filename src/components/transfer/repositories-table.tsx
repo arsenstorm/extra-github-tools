@@ -1,12 +1,17 @@
 import { memo, useState } from "react";
 import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
-import { RepositoryBadge } from "@/components/repositories/badge";
 import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
 import {
 	SelectableRepositoryRow,
 	stopEventPropagation,
 } from "@/components/repositories/selectable-row";
 import { SelectableRepositoriesTable } from "@/components/repositories/selectable-table";
+import {
+	ARCHIVED_BADGE,
+	FORK_BADGE,
+	StateBadge,
+	VISIBILITY_BADGES,
+} from "@/components/repositories/state-badges";
 import {
 	RepositoryStatusBadge,
 	type StatusBadgeStyle,
@@ -116,9 +121,7 @@ const TransferRepositoryRow = memo(function TransferRepositoryRowComponent({
 				<Strong>{repository.name}</Strong>
 			</TableCell>
 			<TableCell>
-				<RepositoryBadge>
-					{repository.private ? "Private" : "Public"}
-				</RepositoryBadge>
+				<StateBadge badge={VISIBILITY_BADGES[repository.visibility]} />
 			</TableCell>
 			<TableCell>
 				<RepositoryTypeCell repository={repository} />
@@ -151,8 +154,8 @@ function RepositoryTypeCell({
 
 	return (
 		<div className="flex gap-2">
-			{repository.fork ? <RepositoryBadge>Fork</RepositoryBadge> : null}
-			{repository.archived ? <RepositoryBadge>Archived</RepositoryBadge> : null}
+			{repository.fork ? <StateBadge badge={FORK_BADGE} /> : null}
+			{repository.archived ? <StateBadge badge={ARCHIVED_BADGE} /> : null}
 		</div>
 	);
 }
