@@ -1,4 +1,5 @@
 import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
+import { EmptyTableRow } from "@/components/repositories/empty-table-row";
 import {
 	Table,
 	TableBody,
@@ -8,7 +9,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Text } from "@/components/ui/text";
-import type { GitHubRepository } from "@/github";
+import type { GitHubRepository } from "@/github/types";
 
 export function RepositoriesTable({
 	onSelect,
@@ -49,11 +50,7 @@ export function RepositoriesTable({
 						</TableRow>
 					))
 				) : (
-					<TableRow>
-						<TableCell className="text-center" colSpan={3}>
-							No repositories found.
-						</TableCell>
-					</TableRow>
+					<EmptyTableRow colSpan={3} />
 				)}
 			</TableBody>
 		</Table>

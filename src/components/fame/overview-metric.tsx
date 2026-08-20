@@ -1,4 +1,17 @@
+import clsx from "clsx";
 import { Text } from "@/components/ui/text";
+
+type MetricTone = "default" | "negative" | "positive";
+
+const TONE_STYLES: Record<MetricTone, { className?: string; prefix: string }> =
+	{
+		default: { prefix: "" },
+		negative: { className: "text-red-600 dark:text-red-400", prefix: "-" },
+		positive: {
+			className: "text-emerald-600 dark:text-emerald-400",
+			prefix: "+",
+		},
+	};
 
 export function OverviewMetric({
 	className,
@@ -10,36 +23,24 @@ export function OverviewMetric({
 	className?: string;
 	isLast?: boolean;
 	label: string;
-	tone?: "default" | "negative" | "positive";
+	tone?: MetricTone;
 	value: number;
 }>) {
-	let valueClassName = "mt-2 font-bold text-3xl";
-	let valuePrefix = "";
-
-	if (tone === "positive") {
-		valueClassName =
-			"mt-2 font-bold text-3xl text-emerald-600 dark:text-emerald-400";
-		valuePrefix = "+";
-	} else if (tone === "negative") {
-		valueClassName = "mt-2 font-bold text-3xl text-red-600 dark:text-red-400";
-		valuePrefix = "-";
-	}
+	const toneStyle = TONE_STYLES[tone];
 
 	return (
 		<div
-			className={[
+			className={clsx(
 				"border-zinc-200 border-b p-6 dark:border-zinc-800",
-				isLast ? "" : "border-r",
-				className ?? "",
-			]
-				.join(" ")
-				.trim()}
+				!isLast && "border-r",
+				className
+			)}
 		>
 			<Text className="font-medium text-sm text-zinc-500 dark:text-zinc-400">
 				{label}
 			</Text>
-			<Text className={valueClassName}>
-				{valuePrefix}
+			<Text className={clsx("mt-2 font-bold text-3xl", toneStyle.className)}>
+				{toneStyle.prefix}
 				{value.toLocaleString()}
 			</Text>
 		</div>

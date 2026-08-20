@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { GitHubRepository } from "@/github";
+import type { GitHubRepository } from "@/github/types";
 import {
 	clampRepositoryPage,
 	formatRepositoryPushedAt,
@@ -25,6 +25,7 @@ const createRepository = (
 		name,
 		private: false,
 		pushedAt,
+		subscription: null,
 		visibility: "public",
 	};
 };

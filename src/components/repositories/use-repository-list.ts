@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import type { GitHubRepository } from "@/github";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { GitHubRepository } from "@/github/types";
 import {
 	DEFAULT_REPOSITORIES_PER_PAGE,
 	type RepositoriesPerPage,
@@ -12,6 +12,11 @@ import {
 	sortRepositories,
 } from "./list-utils";
 
+export interface RepositoryListOptions {
+	/** Repositories still arriving count toward the page total so it doesn't creep up. */
+	expectedCount?: number;
+}
+
 export interface RepositoryListState {
 	currentPage: number;
 	filteredRepositories: GitHubRepository[];
@@ -19,6 +24,8 @@ export interface RepositoryListState {
 	pageEndIndex: number;
 	pageStartIndex: number;
 	paginatedRepositories: GitHubRepository[];
+	/** Rows on the current page whose repositories haven't arrived yet. */
+	placeholderRowCount: number;
 	repositoriesPerPage: RepositoriesPerPage;
 	repositorySearch: string;
 	repositorySort: RepositorySort;
@@ -29,6 +36,9 @@ export interface RepositoryListState {
 		repositoryName: string,
 		shouldSelectRange?: boolean
 	) => void;
+	toggleVisibleRepositories: () => void;
+	/** The number the footer and page count are based on. */
+	totalCount: number;
 	updatePage: (page: number) => void;
 	updateRepositoriesPerPage: (value: RepositoriesPerPage) => void;
 	updateSearch: (value: string) => void;
@@ -36,11 +46,15 @@ export interface RepositoryListState {
 }
 
 export function useRepositoryList(
-	repositories: GitHubRepository[]
+	repositories: GitHubRepository[],
+	options: RepositoryListOptions = {}
 ): RepositoryListState {
-	const [rangeAnchorRepository, setRangeAnchorRepository] = useState<
-		string | null
-	>(null);
+	// The shift-click anchor is only read inside handlers, so a ref keeps
+	// `toggleRepository` stable (memoised rows depend on that).
+	const rangeAnchorRef = useRef<string | null>(null);
+	const setRangeAnchorRepository = (repositoryName: string | null): void => {
+		rangeAnchorRef.current = repositoryName;
+	};
 	const [repositoriesPerPage, setRepositoriesPerPage] =
 		useState<RepositoriesPerPage>(DEFAULT_REPOSITORIES_PER_PAGE);
 	const [repositoryPage, setRepositoryPage] = useState(1);
@@ -66,22 +80,27 @@ export function useRepositoryList(
 		return sortRepositories(matchingRepositories, repositorySort);
 	}, [repositories, repositorySearch, repositorySort]);
 
-	const pageCount = getRepositoryPageCount(
-		filteredRepositories.length,
-		repositoriesPerPage
-	);
+	// While the list is still arriving, the unfiltered view counts every
+	// expected repository so page numbers are stable from the first page on.
+	const isUnfiltered = repositorySearch.trim() === "";
+	const totalCount = isUnfiltered
+		? Math.max(filteredRepositories.length, options.expectedCount ?? 0)
+		: filteredRepositories.length;
+	const pageCount = getRepositoryPageCount(totalCount, repositoriesPerPage);
 	const currentPage = clampRepositoryPage(repositoryPage, pageCount);
 	const pageStartIndex =
-		filteredRepositories.length > 0
-			? (currentPage - 1) * repositoriesPerPage
-			: 0;
+		totalCount > 0 ? (currentPage - 1) * repositoriesPerPage : 0;
 	const pageEndIndex = Math.min(
 		pageStartIndex + repositoriesPerPage,
-		filteredRepositories.length
+		totalCount
 	);
 	const paginatedRepositories = useMemo(
 		() => filteredRepositories.slice(pageStartIndex, pageEndIndex),
 		[filteredRepositories, pageEndIndex, pageStartIndex]
+	);
+	const placeholderRowCount = Math.max(
+		0,
+		pageEndIndex - pageStartIndex - paginatedRepositories.length
 	);
 	const visibleRepositoryNames = useMemo(
 		() => paginatedRepositories.map((repository) => repository.name),
@@ -117,52 +136,74 @@ export function useRepositoryList(
 		setRepositorySort(value);
 	};
 
-	const toggleRepository = (
-		repositoryName: string,
-		shouldSelectRange = false
-	): void => {
-		setSelectedRepositoriesState((previousRepositories) => {
-			const nextRepositories = new Set(previousRepositories);
-			const anchorIndex = rangeAnchorRepository
-				? visibleRepositoryNames.indexOf(rangeAnchorRepository)
-				: -1;
-			const repositoryIndex = visibleRepositoryNames.indexOf(repositoryName);
+	const toggleRepository = useCallback(
+		(repositoryName: string, shouldSelectRange = false): void => {
+			// Read the anchor now: the updater below runs later, after this
+			// click has become the new anchor.
+			const rangeAnchor = rangeAnchorRef.current;
 
-			if (shouldSelectRange && anchorIndex >= 0 && repositoryIndex >= 0) {
-				const rangeStart = Math.min(anchorIndex, repositoryIndex);
-				const rangeEnd = Math.max(anchorIndex, repositoryIndex);
-				const shouldSelectRepositories = !nextRepositories.has(repositoryName);
+			rangeAnchorRef.current = repositoryName;
+			setSelectedRepositoriesState((previousRepositories) => {
+				const nextRepositories = new Set(previousRepositories);
+				// An absent anchor can't match a name, so indexOf yields -1.
+				const anchorIndex = visibleRepositoryNames.indexOf(rangeAnchor ?? "");
+				const repositoryIndex = visibleRepositoryNames.indexOf(repositoryName);
 
-				for (const visibleRepositoryName of visibleRepositoryNames.slice(
-					rangeStart,
-					rangeEnd + 1
-				)) {
-					if (shouldSelectRepositories) {
-						nextRepositories.add(visibleRepositoryName);
-					} else {
-						nextRepositories.delete(visibleRepositoryName);
+				if (shouldSelectRange && anchorIndex >= 0 && repositoryIndex >= 0) {
+					const rangeStart = Math.min(anchorIndex, repositoryIndex);
+					const rangeEnd = Math.max(anchorIndex, repositoryIndex);
+					const shouldSelectRepositories =
+						!nextRepositories.has(repositoryName);
+
+					for (const visibleRepositoryName of visibleRepositoryNames.slice(
+						rangeStart,
+						rangeEnd + 1
+					)) {
+						if (shouldSelectRepositories) {
+							nextRepositories.add(visibleRepositoryName);
+						} else {
+							nextRepositories.delete(visibleRepositoryName);
+						}
 					}
+
+					return getSelectedRepositoryNames(nextRepositories, repositories);
+				}
+
+				if (nextRepositories.has(repositoryName)) {
+					nextRepositories.delete(repositoryName);
+				} else {
+					nextRepositories.add(repositoryName);
 				}
 
 				return getSelectedRepositoryNames(nextRepositories, repositories);
-			}
+			});
+		},
+		[repositories, visibleRepositoryNames]
+	);
 
-			if (nextRepositories.has(repositoryName)) {
-				nextRepositories.delete(repositoryName);
-			} else {
-				nextRepositories.add(repositoryName);
-			}
+	const setSelectedRepositories = useCallback(
+		(repositoryNames: string[]): void => {
+			setSelectedRepositoriesState(
+				getSelectedRepositoryNames(repositoryNames, repositories)
+			);
+			rangeAnchorRef.current = null;
+		},
+		[repositories]
+	);
 
-			return getSelectedRepositoryNames(nextRepositories, repositories);
-		});
-		setRangeAnchorRepository(repositoryName);
-	};
+	/** Selects every row on the current page, or clears them when they are all selected. */
+	const toggleVisibleRepositories = (): void => {
+		const selectedSet = new Set(selectedRepositories);
+		const areAllVisibleSelected =
+			visibleRepositoryNames.length > 0 &&
+			visibleRepositoryNames.every((name) => selectedSet.has(name));
+		const visibleSet = new Set(visibleRepositoryNames);
 
-	const setSelectedRepositories = (repositoryNames: string[]): void => {
-		setSelectedRepositoriesState(
-			getSelectedRepositoryNames(repositoryNames, repositories)
+		setSelectedRepositories(
+			areAllVisibleSelected
+				? selectedRepositories.filter((name) => !visibleSet.has(name))
+				: [...selectedRepositories, ...visibleRepositoryNames]
 		);
-		setRangeAnchorRepository(null);
 	};
 
 	const resetList = (): void => {
@@ -181,6 +222,7 @@ export function useRepositoryList(
 		pageEndIndex,
 		pageStartIndex,
 		paginatedRepositories,
+		placeholderRowCount,
 		repositoriesPerPage,
 		repositorySearch,
 		repositorySort,
@@ -188,6 +230,8 @@ export function useRepositoryList(
 		selectedRepositories,
 		setSelectedRepositories,
 		toggleRepository,
+		toggleVisibleRepositories,
+		totalCount,
 		updatePage,
 		updateRepositoriesPerPage,
 		updateSearch,

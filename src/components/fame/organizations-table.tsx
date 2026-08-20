@@ -1,3 +1,4 @@
+import { EmptyTableRow } from "@/components/repositories/empty-table-row";
 import {
 	Table,
 	TableBody,
@@ -7,7 +8,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { Text } from "@/components/ui/text";
-import type { GitHubAccount } from "@/github";
+import type { GitHubAccount } from "@/github/types";
 
 export function OrganizationsTable({
 	accounts,
@@ -49,11 +50,7 @@ export function OrganizationsTable({
 						</TableRow>
 					))
 				) : (
-					<TableRow>
-						<TableCell className="text-center" colSpan={3}>
-							No GitHub accounts found.
-						</TableCell>
-					</TableRow>
+					<EmptyTableRow colSpan={3}>No GitHub accounts found.</EmptyTableRow>
 				)}
 			</TableBody>
 		</Table>

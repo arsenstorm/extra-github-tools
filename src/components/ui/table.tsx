@@ -18,6 +18,7 @@ const TableContext = createContext<{
 export function Table({
 	bleed = false,
 	dense = false,
+	fixed = false,
 	grid = false,
 	striped = false,
 	className,
@@ -26,6 +27,8 @@ export function Table({
 }: {
 	bleed?: boolean;
 	dense?: boolean;
+	/** Use fixed table layout so column widths come from the header cells, not the content. */
+	fixed?: boolean;
 	grid?: boolean;
 	striped?: boolean;
 } & Readonly<React.ComponentPropsWithoutRef<"div">>) {
@@ -52,7 +55,14 @@ export function Table({
 							!bleed && "sm:px-(--gutter)"
 						)}
 					>
-						<table className="min-w-full text-left text-sm/6">{children}</table>
+						<table
+							className={clsx(
+								"min-w-full text-left text-sm/6",
+								fixed && "w-full table-fixed"
+							)}
+						>
+							{children}
+						</table>
 					</div>
 				</div>
 			</div>

@@ -1,4 +1,4 @@
-import type { GitHubRepository } from "@/github";
+import type { GitHubRepository } from "@/github/types";
 import type { RepositorySort } from "./list-types";
 
 export const formatRepositoryPushedAt = (pushedAt: string | null): string => {

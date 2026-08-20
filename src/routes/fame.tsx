@@ -1,11 +1,12 @@
-import { createFileRoute, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { useAppSession } from "@/app-session";
 import { FamePageContent } from "@/components/fame/fame-page-content";
 import { FamePendingState } from "@/components/fame/fame-pending-state";
-import { CONFIG } from "@/config";
+import { normalizeSearchValue, usePageDataErrorToast } from "@/route-utils";
 import { getFamePageData } from "@/server-functions";
+import { createToolRouteOptions, TOOLS } from "@/tools";
 
 interface FameSearch {
 	org?: string;
@@ -14,35 +15,14 @@ interface FameSearch {
 
 const FAME_STATS_PENDING_REFRESH_MS = 5000;
 
-const normalizeSearchValue = (value: unknown): string | undefined =>
-	typeof value === "string" && value.trim().length > 0
-		? value.trim()
-		: undefined;
-
 const validateFameSearch = (search: Record<string, unknown>): FameSearch => ({
 	org: normalizeSearchValue(search.org),
 	repo: normalizeSearchValue(search.repo),
 });
 
 export const Route = createFileRoute("/fame")({
-	beforeLoad: () => {
-		if (!CONFIG.commitFame.enabled) {
-			throw redirect({ to: "/" });
-		}
-	},
+	...createToolRouteOptions(TOOLS.fame),
 	component: FameRoute,
-	head: () => ({
-		meta: [
-			{
-				title: "Commit Fame - Extra GitHub Tools",
-			},
-			{
-				content:
-					"See how your commits compare to your colleagues and who's doing more.",
-				name: "description",
-			},
-		],
-	}),
 	loader: ({ deps }) => getFamePageData({ data: deps }),
 	loaderDeps: ({ search }) => search,
 	pendingComponent: FamePendingState,
@@ -57,11 +37,7 @@ function FameRoute() {
 	const search = Route.useSearch();
 	const navigate = Route.useNavigate();
 
-	useEffect(() => {
-		if (pageData.error) {
-			toast.error(pageData.error);
-		}
-	}, [pageData.error]);
+	usePageDataErrorToast(pageData.error);
 
 	useEffect(() => {
 		if (!(pageData.statsPending && search.org && search.repo)) {
@@ -86,20 +62,10 @@ function FameRoute() {
 			hasGitHubAccess={Boolean(appSession.github?.hasAccessToken)}
 			isSignedIn={Boolean(appSession.session)}
 			onSelectOrganization={(organizationHandle) =>
-				navigate({
-					search: {
-						org: organizationHandle,
-						repo: undefined,
-					},
-				})
+				navigate({ search: { org: organizationHandle, repo: undefined } })
 			}
 			onSelectRepository={(repositoryName) =>
-				navigate({
-					search: {
-						org: search.org,
-						repo: repositoryName,
-					},
-				})
+				navigate({ search: { org: search.org, repo: repositoryName } })
 			}
 			org={search.org}
 			pageData={pageData}
