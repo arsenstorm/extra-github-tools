@@ -15,7 +15,12 @@ import {
 import { Strong, Text } from "@/components/ui/text";
 import { formatRepositoryCount } from "@/format";
 import type { GitHubRepository, ManageRepositoryActions } from "@/github/types";
-import { getRepositoryChangeLines, type StagedChanges } from "./utils";
+import { ChangeWarning } from "./change-warning";
+import {
+	getArchivedVisibilityWarning,
+	getRepositoryChangeLines,
+	type StagedChanges,
+} from "./utils";
 
 /** Lists every staged change so the whole batch is confirmed at once. */
 export function ManageReviewDialog({
@@ -105,6 +110,9 @@ function StagedChangeItem({
 	const changeLines = actions
 		? getRepositoryChangeLines(repository, actions)
 		: [];
+	const warning = actions
+		? getArchivedVisibilityWarning(repository, actions)
+		: null;
 
 	return (
 		<li className="flex items-start justify-between gap-3 px-3 py-2">
@@ -115,6 +123,7 @@ function StagedChangeItem({
 						{changeLine}
 					</Text>
 				))}
+				<ChangeWarning warning={warning} />
 			</div>
 			<Button
 				aria-label={`Remove changes for ${repository.name}`}

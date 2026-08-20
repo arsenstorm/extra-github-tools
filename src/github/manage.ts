@@ -279,6 +279,63 @@ const loadManagedRepository = async (
 	return (await response.json()) as GitHubManagedRepositoryResponse;
 };
 
+const patchRepositorySettings = async (
+	context: ManageContext,
+	repositoryName: string,
+	body: RepositorySettingsBody
+): Promise<ManageSettingResult> => {
+	const pathname = repositoryPathname(context.owner, repositoryName);
+	const response = await fetchWithRateLimitRetry(context, () =>
+		fetchGitHubResponse(context, pathname, jsonRequestInit("PATCH", body))
+	);
+
+	return await toSettingResult(response, `Failed to update ${repositoryName}.`);
+};
+
+/**
+ * GitHub rejects every write to an archived repository except unarchiving it,
+ * so a visibility change unarchives first and re-archives unless the repository
+ * is meant to end up unarchived.
+ */
+const applyVisibilityToArchivedRepository = async (
+	context: ManageContext,
+	repositoryName: string,
+	body: RepositorySettingsBody
+): Promise<RepositorySettingsResults> => {
+	const staysArchived = body.archived !== false;
+	const unarchiveResult = await patchRepositorySettings(
+		context,
+		repositoryName,
+		{ archived: false }
+	);
+	const archiveResultAfterUnarchive = staysArchived ? null : unarchiveResult;
+
+	if (unarchiveResult.outcome === "failed") {
+		return {
+			archive: staysArchived ? null : unarchiveResult,
+			visibility: { ...unarchiveResult },
+		};
+	}
+
+	const visibilityResult = await patchRepositorySettings(
+		context,
+		repositoryName,
+		{ archived: staysArchived ? true : undefined, visibility: body.visibility }
+	);
+	const rearchiveFailed =
+		staysArchived && visibilityResult.outcome === "failed";
+
+	return {
+		archive: rearchiveFailed
+			? {
+					...visibilityResult,
+					error: `${repositoryName} was unarchived to change its visibility and could not be archived again: ${visibilityResult.error}`,
+				}
+			: archiveResultAfterUnarchive,
+		visibility: visibilityResult,
+	};
+};
+
 const applyRepositorySettings = async (
 	context: ManageContext,
 	repositoryName: string,
@@ -315,12 +372,18 @@ const applyRepositorySettings = async (
 			return { archive, visibility };
 		}
 
-		const patchResponse = await fetchWithRateLimitRetry(context, () =>
-			fetchGitHubResponse(context, pathname, jsonRequestInit("PATCH", body))
-		);
-		const patchResult = await toSettingResult(
-			patchResponse,
-			`Failed to update ${repositoryName}.`
+		if (current.archived && body.visibility !== undefined) {
+			return await applyVisibilityToArchivedRepository(
+				context,
+				repositoryName,
+				body
+			);
+		}
+
+		const patchResult = await patchRepositorySettings(
+			context,
+			repositoryName,
+			body
 		);
 
 		return {

@@ -29,6 +29,94 @@ const getSettingResults = (
 	result.subscription,
 ];
 
+/** The repository fields the app can change, as they stand after a run. */
+export type AppliedRepositoryState = Partial<
+	Pick<GitHubRepository, "archived" | "subscription" | "visibility">
+>;
+
+export type AppliedRepositoryStates = ReadonlyMap<
+	string,
+	AppliedRepositoryState
+>;
+
+/**
+ * The new values a successful run gave a repository, so the table can show
+ * them before the list is refetched.
+ */
+export const getAppliedRepositoryState = (
+	actions: ManageRepositoryActions,
+	result: ManageRepositoryResult
+): AppliedRepositoryState | null => {
+	const applied: AppliedRepositoryState = {};
+
+	if (
+		result.archive?.outcome === "changed" &&
+		actions.archiveAction !== "current"
+	) {
+		applied.archived = actions.archiveAction === "archived";
+	}
+
+	if (
+		result.visibility?.outcome === "changed" &&
+		actions.visibilityAction !== "current"
+	) {
+		applied.visibility = actions.visibilityAction;
+	}
+
+	if (
+		result.subscription?.outcome === "changed" &&
+		actions.subscriptionAction !== "current"
+	) {
+		applied.subscription = actions.subscriptionAction;
+	}
+
+	return Object.keys(applied).length > 0 ? applied : null;
+};
+
+const matchesAppliedState = (
+	repository: GitHubRepository,
+	applied: AppliedRepositoryState
+): boolean =>
+	Object.entries(applied).every(
+		([key, value]) => repository[key as keyof AppliedRepositoryState] === value
+	);
+
+/** Overlays applied states on the loaded list; repositories already up to date keep their identity. */
+export const applyRepositoryStates = (
+	repositories: GitHubRepository[],
+	appliedStates: AppliedRepositoryStates
+): GitHubRepository[] => {
+	if (appliedStates.size === 0) {
+		return repositories;
+	}
+
+	return repositories.map((repository) => {
+		const applied = appliedStates.get(repository.name);
+
+		return applied && !matchesAppliedState(repository, applied)
+			? { ...repository, ...applied }
+			: repository;
+	});
+};
+
+/** Drops applied states the refetched list already reflects. */
+export const pruneAppliedStates = (
+	repositories: GitHubRepository[],
+	appliedStates: AppliedRepositoryStates
+): AppliedRepositoryStates => {
+	const next = new Map(appliedStates);
+
+	for (const repository of repositories) {
+		const applied = next.get(repository.name);
+
+		if (applied && matchesAppliedState(repository, applied)) {
+			next.delete(repository.name);
+		}
+	}
+
+	return next.size === appliedStates.size ? appliedStates : next;
+};
+
 export const hasChangedSetting = (result: ManageRepositoryResult): boolean =>
 	getSettingResults(result).some(
 		(settingResult) => settingResult?.outcome === "changed"
@@ -210,6 +298,26 @@ export const getRepositoryChangeLines = (
 		getVisibilityChangeLine(repository, actions),
 		getSubscriptionChangeLine(repository, actions),
 	].filter((line): line is string => line !== null);
+
+/**
+ * GitHub only lets an archived repository be unarchived, so a visibility change
+ * unarchives and re-archives it, and GitHub then shows today as the archive date.
+ */
+export const getArchivedVisibilityWarning = (
+	repository: GitHubRepository,
+	actions: ManageRepositoryActions
+): string | null => {
+	const changesVisibility =
+		getVisibilityChangeLine(repository, actions) !== null;
+	const staysArchived =
+		repository.archived && actions.archiveAction !== "unarchived";
+
+	if (!(changesVisibility && staysArchived)) {
+		return null;
+	}
+
+	return "Changing visibility re-archives this repository, so GitHub will show today as its archive date.";
+};
 
 export const getManageVisibilityActionOptions = (
 	supportsInternalVisibility: boolean

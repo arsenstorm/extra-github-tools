@@ -15,11 +15,13 @@ import { Field, Fieldset, Label } from "@/components/ui/fieldset";
 import { Strong, Text } from "@/components/ui/text";
 import { formatRepositoryCount } from "@/format";
 import type { GitHubRepository, ManageRepositoryActions } from "@/github/types";
+import { ChangeWarning } from "./change-warning";
 import {
 	MANAGE_ARCHIVE_ACTION_OPTIONS,
 	MANAGE_SUBSCRIPTION_ACTION_OPTIONS,
 } from "./types";
 import {
+	getArchivedVisibilityWarning,
 	getManageActionsSummary,
 	getManageVisibilityActionOptions,
 	getRepositoryChangeLines,
@@ -160,6 +162,9 @@ function RepositoryChangePreview({
 			) : (
 				<Text className="mt-1">No change needed.</Text>
 			)}
+			<ChangeWarning
+				warning={getArchivedVisibilityWarning(repository, actions)}
+			/>
 		</RepositoryPreviewItem>
 	);
 }
