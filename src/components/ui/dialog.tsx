@@ -33,7 +33,7 @@ export function Dialog({
 				className="fixed inset-0 bg-zinc-950/40 backdrop-blur-sm transition duration-100 data-closed:opacity-0 data-enter:ease-out data-leave:ease-in dark:bg-zinc-950/60"
 				transition
 			/>
-			<div className="fixed inset-0 w-screen overflow-y-auto p-4 sm:p-6">
+			<div className="scrollbar-subtle fixed inset-0 w-screen overflow-y-auto p-4 sm:p-6">
 				<div className="grid min-h-full grid-rows-[1fr_auto] justify-items-center sm:grid-rows-[1fr_auto_3fr]">
 					<DialogPanel
 						className={clsx(
@@ -80,7 +80,10 @@ export function DialogBody({
 	return (
 		<div
 			{...props}
-			className={clsx(className, "mt-6 flex-1 overflow-y-auto")}
+			className={clsx(
+				className,
+				"scrollbar-subtle mt-6 flex-1 overflow-y-auto"
+			)}
 			data-slot="dialog-body"
 		/>
 	);
