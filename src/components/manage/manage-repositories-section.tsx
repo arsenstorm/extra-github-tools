@@ -1,6 +1,7 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { RepositoryListPagination } from "@/components/repositories/pagination";
 import { useRepositoryPages } from "@/components/repositories/use-repository-pages";
+import { useScrollToPageTop } from "@/components/repositories/use-scroll-to-page-top";
 import type { GitHubAccount } from "@/github/types";
 import { usePageDataErrorToast } from "@/route-utils";
 import type {
@@ -58,10 +59,15 @@ export function ManageRepositoriesSection({
 		[openEditDialog]
 	);
 
+	const listTopRef = useRef<HTMLDivElement>(null);
+
 	usePageDataErrorToast(pages.error);
+	useScrollToPageTop(listTopRef, list.currentPage);
 
 	return (
 		<>
+			{/* Paging scrolls back here so each page starts at its top. */}
+			<div className="scroll-mt-6" ref={listTopRef} />
 			<ManageToolbar
 				account={account}
 				accounts={accounts}
