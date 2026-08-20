@@ -1135,6 +1135,108 @@ describe("manageGitHubRepositories", () => {
 		expect(results[0]?.visibility?.outcome).toBe("changed");
 	});
 
+	const createArchivedRepositoryFetch = (requestBodies: unknown[]) =>
+		createFetchImplementation((_url, init) => {
+			if ((init.method ?? "GET") === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(true, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			requestBodies.push(JSON.parse(String(init.body)));
+
+			return new Response("", { status: 200, statusText: "OK" });
+		});
+
+	it("unarchives and re-archives around a visibility change on an archived repository", async () => {
+		const requestBodies: unknown[] = [];
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			[
+				{
+					actions: { ...noChangeActions, visibilityAction: "private" },
+					repository: "repo",
+				},
+			],
+			createArchivedRepositoryFetch(requestBodies)
+		);
+
+		expect(requestBodies).toEqual([
+			{ archived: false },
+			{ archived: true, visibility: "private" },
+		]);
+		expect(results[0]?.ok).toBe(true);
+		expect(results[0]?.archive).toBeNull();
+		expect(results[0]?.visibility?.outcome).toBe("changed");
+	});
+
+	it("unarchives before changing visibility when the repository should end up unarchived", async () => {
+		const requestBodies: unknown[] = [];
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			[
+				{
+					actions: {
+						archiveAction: "unarchived",
+						subscriptionAction: "current",
+						visibilityAction: "private",
+					},
+					repository: "repo",
+				},
+			],
+			createArchivedRepositoryFetch(requestBodies)
+		);
+
+		expect(requestBodies).toEqual([
+			{ archived: false },
+			{ visibility: "private" },
+		]);
+		expect(results[0]?.archive?.outcome).toBe("changed");
+		expect(results[0]?.visibility?.outcome).toBe("changed");
+	});
+
+	it("reports a failed re-archive after unarchiving for a visibility change", async () => {
+		const fetchImplementation = createFetchImplementation((_url, init) => {
+			if ((init.method ?? "GET") === "GET") {
+				return new Response(
+					JSON.stringify(createManagedRepositoryResponse(true, "public")),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			const body = JSON.parse(String(init.body)) as { archived?: boolean };
+
+			return body.archived === false
+				? new Response("", { status: 200, statusText: "OK" })
+				: new Response(JSON.stringify({ message: "Nope" }), {
+						status: 422,
+						statusText: "Unprocessable Entity",
+					});
+		});
+
+		const results = await manageGitHubRepositories(
+			"token",
+			"owner",
+			[
+				{
+					actions: { ...noChangeActions, visibilityAction: "private" },
+					repository: "repo",
+				},
+			],
+			fetchImplementation
+		);
+
+		expect(results[0]?.ok).toBe(false);
+		expect(results[0]?.visibility?.outcome).toBe("failed");
+		expect(results[0]?.archive?.outcome).toBe("failed");
+		expect(results[0]?.archive?.error).toContain("could not be archived again");
+	});
+
 	describe("notification subscription updates", () => {
 		it("watches a repository that has no existing subscription", async () => {
 			const methods: string[] = [];
