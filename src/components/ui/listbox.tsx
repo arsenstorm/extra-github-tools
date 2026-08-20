@@ -103,7 +103,7 @@ export function Listbox<T>({
 				anchor="selection start"
 				className={clsx(
 					// Anchor positioning
-					"[--anchor-offset:-1.625rem] [--anchor-padding:--spacing(4)] sm:[--anchor-offset:-1.375rem]",
+					"[--anchor-offset:-0.25rem] [--anchor-padding:--spacing(4)]",
 					// Base styles
 					"isolate w-max min-w-[calc(var(--button-width)+1.75rem)] select-none scroll-py-1 rounded-xl p-1",
 					// Invisible border that is only visible in `forced-colors` mode for accessibility purposes
@@ -157,7 +157,7 @@ export function ListboxOption<T>({
 					<div
 						className={clsx(
 							// Basic layout
-							"group/option grid cursor-default grid-cols-[--spacing(5)_1fr] items-baseline gap-x-2 rounded-lg py-2.5 pr-3.5 pl-2 sm:grid-cols-[--spacing(4)_1fr] sm:py-1.5 sm:pr-3 sm:pl-1.5",
+							"group/option grid cursor-default grid-cols-[minmax(0,1fr)_1.25rem] items-baseline gap-x-2 rounded-lg py-2.5 pr-2 pl-3.5 sm:grid-cols-[minmax(0,1fr)_1rem] sm:py-1.5 sm:pr-1.5 sm:pl-3",
 							// Typography
 							"text-base/6 text-zinc-950 sm:text-sm/6 dark:text-white forced-colors:text-[CanvasText]",
 							// Focus
@@ -168,9 +168,12 @@ export function ListboxOption<T>({
 							"data-disabled:opacity-50"
 						)}
 					>
+						<span className={clsx(className, sharedClasses, "col-start-1")}>
+							{children}
+						</span>
 						<svg
 							aria-hidden="true"
-							className="relative hidden size-5 self-center stroke-current group-data-selected/option:inline sm:size-4"
+							className="relative col-start-2 hidden size-5 self-center stroke-current group-data-selected/option:inline sm:size-4"
 							fill="none"
 							viewBox="0 0 16 16"
 						>
@@ -181,9 +184,6 @@ export function ListboxOption<T>({
 								strokeWidth={1.5}
 							/>
 						</svg>
-						<span className={clsx(className, sharedClasses, "col-start-2")}>
-							{children}
-						</span>
 					</div>
 				);
 			}}
