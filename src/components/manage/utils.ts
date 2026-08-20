@@ -9,6 +9,7 @@ import type {
 } from "@/github/types";
 import type { ManageRepositoryChangeInput } from "@/server-functions";
 import {
+	DEFAULT_MANAGE_ACTIONS,
 	MANAGE_VISIBILITY_ACTION_OPTIONS,
 	MANAGE_VISIBILITY_TARGET_OPTIONS,
 	type ManageRepositoryStatus,
@@ -302,4 +303,74 @@ export const createManageChangeInput = (
 	}
 
 	return changeInput;
+};
+
+/** The repository's current settings expressed as actions, for comparison with staged ones. */
+export const getRepositoryStateActions = (
+	repository: GitHubRepository
+): ManageRepositoryActions => ({
+	archiveAction: repository.archived ? "archived" : "unarchived",
+	subscriptionAction: repository.subscription ?? "current",
+	visibilityAction: repository.visibility,
+});
+
+/**
+ * Merges a change into a repository's staged actions. Settings that match the
+ * repository's current state drop back to "current"; returns null when nothing
+ * is left to change.
+ */
+export const mergeStagedActions = (
+	repository: GitHubRepository,
+	staged: ManageRepositoryActions | undefined,
+	change: Partial<ManageRepositoryActions>
+): ManageRepositoryActions | null => {
+	const current = getRepositoryStateActions(repository);
+	const merged: ManageRepositoryActions = {
+		...DEFAULT_MANAGE_ACTIONS,
+		...staged,
+		...change,
+	};
+	const next: ManageRepositoryActions = {
+		archiveAction:
+			merged.archiveAction === current.archiveAction
+				? "current"
+				: merged.archiveAction,
+		subscriptionAction:
+			merged.subscriptionAction === current.subscriptionAction
+				? "current"
+				: merged.subscriptionAction,
+		visibilityAction:
+			merged.visibilityAction === current.visibilityAction
+				? "current"
+				: merged.visibilityAction,
+	};
+
+	return hasManageAction(next) ? next : null;
+};
+
+export type StagedChanges = ReadonlyMap<string, ManageRepositoryActions>;
+
+/** Applies one change to every listed repository; untouched entries keep their identity. */
+export const stageChanges = (
+	staged: StagedChanges,
+	repositories: GitHubRepository[],
+	change: Partial<ManageRepositoryActions>
+): StagedChanges => {
+	const next = new Map(staged);
+
+	for (const repository of repositories) {
+		const actions = mergeStagedActions(
+			repository,
+			staged.get(repository.name),
+			change
+		);
+
+		if (actions) {
+			next.set(repository.name, actions);
+		} else {
+			next.delete(repository.name);
+		}
+	}
+
+	return next;
 };

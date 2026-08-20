@@ -7,6 +7,11 @@ import {
 } from "@/components/repositories/selectable-row";
 import { SelectableRepositoriesTable } from "@/components/repositories/selectable-table";
 import {
+	getArchivedBadge,
+	SUBSCRIPTION_BADGES,
+	VISIBILITY_BADGES,
+} from "@/components/repositories/state-badges";
+import {
 	RepositoryStatusBadge,
 	type StatusBadgeStyle,
 } from "@/components/repositories/status-badge";
@@ -31,6 +36,7 @@ import {
 import {
 	getManageRepositoryStatus,
 	getManageVisibilityTargetOptions,
+	type StagedChanges,
 } from "./utils";
 
 export const MANAGE_TABLE_COLUMNS: TableColumn[] = [
@@ -42,29 +48,25 @@ export const MANAGE_TABLE_COLUMNS: TableColumn[] = [
 	{ className: "w-36", label: "Status" },
 ];
 
-const SUBSCRIPTION_STATE_CELL_LABELS: Record<
-	RepositorySubscriptionState,
-	string
-> = {
-	ignoring: "Ignoring",
-	unwatching: "Not watching",
-	watching: "Watching",
-};
-
 const STATUS_BADGES: Record<
 	Exclude<ManageRepositoryStatus, "idle">,
 	StatusBadgeStyle
 > = {
 	failed: { label: "Failed", tone: "failed" },
 	pending: { label: "Pending", tone: "pending" },
+	staged: { label: "Staged", tone: "info" },
 	unchanged: { label: "No change needed" },
 	updated: { label: "Updated", tone: "success" },
 };
 
-const capitalize = (value: string): string =>
-	value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+const NO_SUBSCRIPTION_BADGE: StatusBadgeStyle = { label: "—" };
 
-type PreviewChange = (
+// Fixed widths sized to each column's longest label, so cycling values doesn't shift the row.
+const VISIBILITY_CELL_CLASS_NAME = "w-[4.5rem]";
+const ARCHIVED_CELL_CLASS_NAME = "w-[4.5rem]";
+const SUBSCRIPTION_CELL_CLASS_NAME = "w-[5.75rem]";
+
+type StageChange = (
 	repositoryName: string,
 	change: Partial<ManageRepositoryActions>
 ) => void;
@@ -72,20 +74,21 @@ type PreviewChange = (
 export function RepositoriesTable({
 	filteredRepositories,
 	isManaging,
-	onPreviewChange,
 	onEditRepository,
+	onStageChange,
 	onToggle,
 	onToggleAll,
 	pendingRepositories,
 	placeholderRowCount = 0,
 	resultsByRepository,
 	selectedRepositories,
+	stagedChanges,
 	supportsInternalVisibility,
 }: Readonly<{
 	filteredRepositories: GitHubRepository[];
 	isManaging: boolean;
-	onPreviewChange: PreviewChange;
 	onEditRepository: (repositoryName: string) => void;
+	onStageChange: StageChange;
 	onToggle: (repositoryName: string, shouldSelectRange?: boolean) => void;
 	onToggleAll: () => void;
 	pendingRepositories: Set<string>;
@@ -93,6 +96,7 @@ export function RepositoriesTable({
 	placeholderRowCount?: number;
 	resultsByRepository: Map<string, ManageRepositoryResult>;
 	selectedRepositories: Set<string>;
+	stagedChanges: StagedChanges;
 	supportsInternalVisibility: boolean;
 }>) {
 	const visibilityOptions = useMemo(
@@ -118,9 +122,10 @@ export function RepositoriesTable({
 					isSelected={selectedRepositories.has(repository.name)}
 					key={repository.id}
 					onEditRepository={onEditRepository}
-					onPreviewChange={onPreviewChange}
+					onStageChange={onStageChange}
 					onToggle={onToggle}
 					repository={repository}
+					stagedActions={stagedChanges.get(repository.name)}
 					status={getManageRepositoryStatus(
 						repository.name,
 						pendingRepositories,
@@ -138,26 +143,28 @@ const RepositoryRow = memo(function RepositoryRowComponent({
 	isManaging,
 	isPending,
 	isSelected,
-	onPreviewChange,
 	onEditRepository,
+	onStageChange,
 	onToggle,
 	repository,
+	stagedActions,
 	status,
 	visibilityOptions,
 }: Readonly<{
 	isManaging: boolean;
 	isPending: boolean;
 	isSelected: boolean;
-	onPreviewChange: PreviewChange;
 	onEditRepository: (repositoryName: string) => void;
+	onStageChange: StageChange;
 	onToggle: (repositoryName: string, shouldSelectRange?: boolean) => void;
 	repository: GitHubRepository;
+	stagedActions: ManageRepositoryActions | undefined;
 	status: ManageRepositoryStatus;
 	visibilityOptions: readonly StateOption<RepositoryVisibility>[];
 }>) {
-	// Menus mount only once the row is hovered, pressed, or focused; until then
-	// the cells render look-alike buttons so a 100-row page paints quickly.
+	// The actions menu mounts only once the row is hovered, pressed, or focused.
 	const [isInteractive, setIsInteractive] = useState(false);
+	const displayStatus = status === "idle" && stagedActions ? "staged" : status;
 
 	return (
 		<SelectableRepositoryRow
@@ -172,16 +179,16 @@ const RepositoryRow = memo(function RepositoryRowComponent({
 			</TableCell>
 			<EditableRepositoryCells
 				disabled={isManaging || isPending}
-				interactive={isInteractive}
-				onPreviewChange={onPreviewChange}
+				onStageChange={onStageChange}
 				repository={repository}
+				stagedActions={stagedActions}
 				visibilityOptions={visibilityOptions}
 			/>
 			<TableCell>
 				<Text>{formatRepositoryPushedAt(repository.pushedAt)}</Text>
 			</TableCell>
 			<TableCell>
-				<RepositoryStatusBadge badges={STATUS_BADGES} status={status} />
+				<RepositoryStatusBadge badges={STATUS_BADGES} status={displayStatus} />
 			</TableCell>
 			<TableCell onClick={stopEventPropagation}>
 				<RepositoryActionsMenu
@@ -201,54 +208,73 @@ const RepositoryRow = memo(function RepositoryRowComponent({
 	);
 });
 
-/** The visibility, archived, and notifications cells; each pick opens the review dialog. */
+/** The visibility, archived, and notifications cells, each showing the staged value when there is one. */
 function EditableRepositoryCells({
 	disabled,
-	interactive,
-	onPreviewChange,
+	onStageChange,
 	repository,
+	stagedActions,
 	visibilityOptions,
 }: Readonly<{
 	disabled: boolean;
-	interactive: boolean;
-	onPreviewChange: PreviewChange;
+	onStageChange: StageChange;
 	repository: GitHubRepository;
+	stagedActions: ManageRepositoryActions | undefined;
 	visibilityOptions: readonly StateOption<RepositoryVisibility>[];
 }>) {
-	const { name, subscription } = repository;
+	const { name } = repository;
+	const stagedVisibility =
+		stagedActions?.visibilityAction === "current"
+			? undefined
+			: stagedActions?.visibilityAction;
+	const stagedArchived =
+		stagedActions?.archiveAction === "current"
+			? undefined
+			: stagedActions?.archiveAction;
+	const stagedSubscription =
+		stagedActions?.subscriptionAction === "current"
+			? undefined
+			: stagedActions?.subscriptionAction;
+
+	const visibility = stagedVisibility ?? repository.visibility;
+	const archived: ManageRepositoryArchiveState =
+		stagedArchived ?? (repository.archived ? "archived" : "unarchived");
+	const subscription: RepositorySubscriptionState | null =
+		stagedSubscription ?? repository.subscription;
 
 	return (
 		<>
 			<EditableStateCell<RepositoryVisibility>
 				ariaLabel={`Visibility for ${name}`}
+				badge={VISIBILITY_BADGES[visibility]}
+				className={VISIBILITY_CELL_CLASS_NAME}
 				disabled={disabled}
-				interactive={interactive}
-				label={capitalize(repository.visibility)}
-				onSelect={(value) => onPreviewChange(name, { visibilityAction: value })}
+				isStaged={stagedVisibility !== undefined}
+				onSelect={(value) => onStageChange(name, { visibilityAction: value })}
 				options={visibilityOptions}
-				value={repository.visibility}
+				value={visibility}
 			/>
 			<EditableStateCell<ManageRepositoryArchiveState>
 				ariaLabel={`Archived state for ${name}`}
+				badge={getArchivedBadge(archived === "archived")}
+				className={ARCHIVED_CELL_CLASS_NAME}
 				disabled={disabled}
-				interactive={interactive}
-				label={repository.archived ? "Archived" : "Active"}
-				onSelect={(value) => onPreviewChange(name, { archiveAction: value })}
+				isStaged={stagedArchived !== undefined}
+				onSelect={(value) => onStageChange(name, { archiveAction: value })}
 				options={MANAGE_ARCHIVE_TARGET_OPTIONS}
-				value={repository.archived ? "archived" : "unarchived"}
+				value={archived}
 			/>
 			<EditableStateCell<RepositorySubscriptionState>
 				ariaLabel={`Notifications for ${name}`}
-				disabled={disabled}
-				interactive={interactive}
-				label={
+				badge={
 					subscription === null
-						? "—"
-						: SUBSCRIPTION_STATE_CELL_LABELS[subscription]
+						? NO_SUBSCRIPTION_BADGE
+						: SUBSCRIPTION_BADGES[subscription]
 				}
-				onSelect={(value) =>
-					onPreviewChange(name, { subscriptionAction: value })
-				}
+				className={SUBSCRIPTION_CELL_CLASS_NAME}
+				disabled={disabled}
+				isStaged={stagedSubscription !== undefined}
+				onSelect={(value) => onStageChange(name, { subscriptionAction: value })}
 				options={MANAGE_SUBSCRIPTION_TARGET_OPTIONS}
 				value={subscription}
 			/>

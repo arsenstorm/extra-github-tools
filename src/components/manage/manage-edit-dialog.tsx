@@ -1,8 +1,4 @@
 import {
-	ConfirmationField,
-	requiresRepositoryConfirmation,
-} from "@/components/repositories/confirmation-field";
-import {
 	RepositoryPreviewItem,
 	RepositoryPreviewList,
 } from "@/components/repositories/preview-list";
@@ -30,14 +26,12 @@ import {
 	hasManageAction,
 } from "./utils";
 
+/** Picks settings for a selection of repositories; confirming stages them for review. */
 export function ManageEditDialog({
 	account,
 	actions,
-	confirmationValue,
-	isManaging,
 	onCancel,
 	onChangeActions,
-	onChangeConfirmationValue,
 	onConfirm,
 	open,
 	repositories,
@@ -45,36 +39,27 @@ export function ManageEditDialog({
 }: Readonly<{
 	account: string;
 	actions: ManageRepositoryActions;
-	confirmationValue: string;
-	isManaging: boolean;
 	onCancel: () => void;
 	onChangeActions: (actions: ManageRepositoryActions) => void;
-	onChangeConfirmationValue: (value: string) => void;
 	onConfirm: () => void;
 	open: boolean;
 	repositories: GitHubRepository[];
 	supportsInternalVisibility: boolean;
 }>) {
 	const hasChosenAction = hasManageAction(actions);
-	const requiresConfirmation = requiresRepositoryConfirmation(
-		repositories.length
-	);
-	const isConfirmed = !requiresConfirmation || confirmationValue === account;
-	const canConfirm = hasChosenAction && !isManaging && isConfirmed;
 
 	return (
 		<Dialog onClose={onCancel} open={open} size="xl">
 			<DialogTitle>Edit repository settings</DialogTitle>
 			<DialogDescription>
 				Changes apply to {formatRepositoryCount(repositories.length)} in{" "}
-				<Strong>{account}</Strong>.
+				<Strong>{account}</Strong>. Nothing runs until you review them.
 			</DialogDescription>
 			<Fieldset className="mt-6">
 				<div className="grid gap-4 sm:grid-cols-3">
 					<ActionField
 						actionKey="archiveAction"
 						actions={actions}
-						disabled={isManaging}
 						label="Archived state"
 						onChange={onChangeActions}
 						options={MANAGE_ARCHIVE_ACTION_OPTIONS}
@@ -82,7 +67,6 @@ export function ManageEditDialog({
 					<ActionField
 						actionKey="visibilityAction"
 						actions={actions}
-						disabled={isManaging}
 						label="Visibility"
 						onChange={onChangeActions}
 						options={getManageVisibilityActionOptions(
@@ -92,7 +76,6 @@ export function ManageEditDialog({
 					<ActionField
 						actionKey="subscriptionAction"
 						actions={actions}
-						disabled={isManaging}
 						label="Notifications"
 						onChange={onChangeActions}
 						options={MANAGE_SUBSCRIPTION_ACTION_OPTIONS}
@@ -114,23 +97,13 @@ export function ManageEditDialog({
 						/>
 					))}
 				</RepositoryPreviewList>
-				{requiresConfirmation ? (
-					<ConfirmationField
-						account={account}
-						className="mt-4"
-						disabled={isManaging}
-						onChange={onChangeConfirmationValue}
-						runNoun="runs"
-						value={confirmationValue}
-					/>
-				) : null}
 			</DialogBody>
 			<DialogActions>
-				<Button disabled={isManaging} onClick={onCancel} outline>
+				<Button onClick={onCancel} outline>
 					Cancel
 				</Button>
-				<Button color="red" disabled={!canConfirm} onClick={onConfirm}>
-					Update repositories
+				<Button disabled={!hasChosenAction} onClick={onConfirm}>
+					Stage changes
 				</Button>
 			</DialogActions>
 		</Dialog>
@@ -140,14 +113,12 @@ export function ManageEditDialog({
 function ActionField<Key extends keyof ManageRepositoryActions>({
 	actionKey,
 	actions,
-	disabled,
 	label,
 	onChange,
 	options,
 }: Readonly<{
 	actionKey: Key;
 	actions: ManageRepositoryActions;
-	disabled: boolean;
 	label: string;
 	onChange: (actions: ManageRepositoryActions) => void;
 	options: ReadonlyArray<{
@@ -160,7 +131,7 @@ function ActionField<Key extends keyof ManageRepositoryActions>({
 			<Label>{label}</Label>
 			<RepositorySelect<ManageRepositoryActions[Key]>
 				ariaLabel={label}
-				disabled={disabled}
+				disabled={false}
 				onChange={(value) => onChange({ ...actions, [actionKey]: value })}
 				options={options}
 				value={actions[actionKey]}
