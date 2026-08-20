@@ -12,6 +12,7 @@ import { ManagePageContent } from "@/components/manage/manage-page-content";
 import { CONFIG } from "@/config";
 import {
 	getManagePageData,
+	getManageWatchedRepositories,
 	manageRepositoriesAction,
 } from "@/server-functions";
 
@@ -64,6 +65,7 @@ function ManageRoute() {
 		select: (state) => state.location.pathname === "/manage" && state.isLoading,
 	});
 	const manageRepositories = useServerFn(manageRepositoriesAction);
+	const loadWatchedRepositories = useServerFn(getManageWatchedRepositories);
 
 	useEffect(() => {
 		if (pageData.error) {
@@ -77,6 +79,9 @@ function ManageRoute() {
 			hasGitHubAccess={Boolean(appSession.github?.hasAccessToken)}
 			isLoadingManageData={isLoadingManageData}
 			isSignedIn={Boolean(appSession.session)}
+			onLoadWatchedRepositories={async () =>
+				await loadWatchedRepositories({ data: { account: search.account } })
+			}
 			onManageChunk={async (changes) => {
 				if (!search.account) {
 					return {

@@ -16,6 +16,7 @@ import type {
 	ManageRepositoriesInput,
 	ManageRepositoriesResult,
 	ManageSearchInput,
+	ManageWatchedRepositoriesResult,
 	TransferPageData,
 	TransferRepositoriesInput,
 	TransferRepositoriesResult,
@@ -256,7 +257,6 @@ export async function resolveManagePageData(
 			organizations: null,
 			repositories: null,
 			supportsInternalVisibility: false,
-			watchedRepositories: null,
 		};
 	}
 
@@ -269,25 +269,15 @@ export async function resolveManagePageData(
 				organizations: await listGitHubAccounts(githubAuth.accessToken),
 				repositories: null,
 				supportsInternalVisibility: false,
-				watchedRepositories: null,
 			};
 		}
 
-		const [
-			organizations,
-			repositories,
-			watchedRepositoryFullNames,
-			organizationSupportsInternal,
-		] = await Promise.all([
-			listGitHubAccounts(githubAuth.accessToken),
-			listGitHubRepositories(githubAuth.accessToken, account),
-			listGitHubWatchedRepositoryFullNames(githubAuth.accessToken),
-			getGitHubOrganizationSupportsInternal(githubAuth.accessToken, account),
-		]);
-		const accountPrefix = `${account.toLowerCase()}/`;
-		const watchedRepositories = watchedRepositoryFullNames
-			.filter((fullName) => fullName.toLowerCase().startsWith(accountPrefix))
-			.map((fullName) => fullName.slice(fullName.indexOf("/") + 1));
+		const [organizations, repositories, organizationSupportsInternal] =
+			await Promise.all([
+				listGitHubAccounts(githubAuth.accessToken),
+				listGitHubRepositories(githubAuth.accessToken, account),
+				getGitHubOrganizationSupportsInternal(githubAuth.accessToken, account),
+			]);
 
 		return {
 			error: null,
@@ -296,7 +286,6 @@ export async function resolveManagePageData(
 			supportsInternalVisibility:
 				organizationSupportsInternal ||
 				repositories.some((repository) => repository.visibility === "internal"),
-			watchedRepositories,
 		};
 	} catch (error) {
 		return {
@@ -304,6 +293,34 @@ export async function resolveManagePageData(
 			organizations: null,
 			repositories: null,
 			supportsInternalVisibility: false,
+		};
+	}
+}
+
+export async function resolveManageWatchedRepositories(
+	headers: Headers,
+	search: ManageSearchInput
+): Promise<ManageWatchedRepositoriesResult> {
+	const githubAuth = await getGitHubAccessTokenFromHeaders(headers);
+
+	if (!(githubAuth && search.account)) {
+		return { error: null, watchedRepositories: null };
+	}
+
+	try {
+		const watchedRepositoryFullNames =
+			await listGitHubWatchedRepositoryFullNames(githubAuth.accessToken);
+		const accountPrefix = `${search.account.toLowerCase()}/`;
+
+		return {
+			error: null,
+			watchedRepositories: watchedRepositoryFullNames
+				.filter((fullName) => fullName.toLowerCase().startsWith(accountPrefix))
+				.map((fullName) => fullName.slice(fullName.indexOf("/") + 1)),
+		};
+	} catch (error) {
+		return {
+			error: toMessage(error, "Failed to load watched repositories."),
 			watchedRepositories: null,
 		};
 	}

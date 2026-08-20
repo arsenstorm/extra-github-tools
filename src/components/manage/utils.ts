@@ -5,9 +5,11 @@ import type {
 	ManageRepositoryResult,
 	ManageSettingResult,
 	RepositorySubscriptionState,
+	RepositoryVisibility,
 } from "@/github";
 import {
 	MANAGE_VISIBILITY_ACTION_OPTIONS,
+	MANAGE_VISIBILITY_TARGET_OPTIONS,
 	type ManageRepositoryStatus,
 } from "./types";
 
@@ -184,10 +186,16 @@ const getVisibilityChangeLine = (
 const getSubscriptionChangeLine = (
 	repository: GitHubRepository,
 	actions: ManageRepositoryActions,
-	watchedRepositories: Set<string>
+	watchedRepositories: Set<string> | null
 ): string | null => {
 	if (actions.subscriptionAction === "current") {
 		return null;
+	}
+
+	const targetLabel = SUBSCRIPTION_STATE_LABELS[actions.subscriptionAction];
+
+	if (!watchedRepositories) {
+		return `Notifications: set to ${targetLabel}`;
 	}
 
 	const currentState = getRepositorySubscriptionDisplayState(
@@ -199,15 +207,13 @@ const getSubscriptionChangeLine = (
 		return null;
 	}
 
-	return `Notifications: ${SUBSCRIPTION_STATE_LABELS[currentState]} → ${
-		SUBSCRIPTION_STATE_LABELS[actions.subscriptionAction]
-	}`;
+	return `Notifications: ${SUBSCRIPTION_STATE_LABELS[currentState]} → ${targetLabel}`;
 };
 
 export const getRepositoryChangeLines = (
 	repository: GitHubRepository,
 	actions: ManageRepositoryActions,
-	watchedRepositories: Set<string>
+	watchedRepositories: Set<string> | null
 ): string[] =>
 	[
 		getArchiveChangeLine(repository, actions),
@@ -222,6 +228,16 @@ export const getManageVisibilityActionOptions = (
 	value: ManageRepositoryActions["visibilityAction"];
 }> =>
 	MANAGE_VISIBILITY_ACTION_OPTIONS.filter(
+		(option) => supportsInternalVisibility || option.value !== "internal"
+	);
+
+export const getManageVisibilityTargetOptions = (
+	supportsInternalVisibility: boolean
+): ReadonlyArray<{
+	label: string;
+	value: RepositoryVisibility;
+}> =>
+	MANAGE_VISIBILITY_TARGET_OPTIONS.filter(
 		(option) => supportsInternalVisibility || option.value !== "internal"
 	);
 

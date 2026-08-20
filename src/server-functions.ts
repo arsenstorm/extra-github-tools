@@ -68,6 +68,10 @@ export interface ManagePageData {
 	organizations: GitHubAccount[] | null;
 	repositories: GitHubRepository[] | null;
 	supportsInternalVisibility: boolean;
+}
+
+export interface ManageWatchedRepositoriesResult {
+	error: string | null;
 	watchedRepositories: string[] | null;
 }
 
@@ -127,6 +131,17 @@ export const getManagePageData = createServerFn({ method: "GET" })
 		const { resolveManagePageData } = await import("./server-functions.server");
 
 		return resolveManagePageData(getRequestHeaders(), data);
+	});
+
+export const getManageWatchedRepositories = createServerFn({ method: "GET" })
+	.validator(validateManageSearchInput)
+	.handler(async ({ data }): Promise<ManageWatchedRepositoriesResult> => {
+		const { getRequestHeaders } = await import("@tanstack/react-start/server");
+		const { resolveManageWatchedRepositories } = await import(
+			"./server-functions.server"
+		);
+
+		return resolveManageWatchedRepositories(getRequestHeaders(), data);
 	});
 
 export const manageRepositoriesAction = createServerFn({ method: "POST" })

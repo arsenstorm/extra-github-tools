@@ -59,7 +59,7 @@ export function ManageEditDialog({
 	open: boolean;
 	repositories: GitHubRepository[];
 	supportsInternalVisibility: boolean;
-	watchedRepositories: Set<string>;
+	watchedRepositories: Set<string> | null;
 }>) {
 	const actionsSummary = getManageActionsSummary(actions);
 	const hasChosenAction = actionsSummary.length > 0;

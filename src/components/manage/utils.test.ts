@@ -22,6 +22,7 @@ import {
 	getManageResultDetails,
 	getManageResultLabel,
 	getManageVisibilityActionOptions,
+	getManageVisibilityTargetOptions,
 	getRepositoryChangeLines,
 	getRepositorySubscriptionDisplayState,
 	showManageResultToast,
@@ -322,6 +323,43 @@ describe("getRepositoryChangeLines", () => {
 			)
 		).toEqual([]);
 	});
+
+	it("states the notification target without a before state when the watched set is unknown", () => {
+		expect(
+			getRepositoryChangeLines(
+				createRepository({ name: "repo" }),
+				createActions({ subscriptionAction: "unwatching" }),
+				null
+			)
+		).toEqual(["Notifications: set to not watching"]);
+	});
+
+	it("keeps the other lines comparable when the watched set is unknown", () => {
+		expect(
+			getRepositoryChangeLines(
+				createRepository({
+					archived: true,
+					name: "repo",
+					visibility: "private",
+				}),
+				createActions({
+					archiveAction: "archived",
+					subscriptionAction: "ignoring",
+					visibilityAction: "public",
+				}),
+				null
+			)
+		).toEqual([
+			"Visibility: private → public",
+			"Notifications: set to ignoring",
+		]);
+	});
+
+	it("returns no lines for an unknown watched set when notifications keep the current value", () => {
+		expect(
+			getRepositoryChangeLines(createRepository(), createActions(), null)
+		).toEqual([]);
+	});
 });
 
 describe("getManageVisibilityActionOptions", () => {
@@ -335,6 +373,20 @@ describe("getManageVisibilityActionOptions", () => {
 		expect(
 			getManageVisibilityActionOptions(true).map((option) => option.value)
 		).toEqual(["current", "public", "private", "internal"]);
+	});
+});
+
+describe("getManageVisibilityTargetOptions", () => {
+	it("omits keep current and internal when the account does not support it", () => {
+		expect(
+			getManageVisibilityTargetOptions(false).map((option) => option.value)
+		).toEqual(["public", "private"]);
+	});
+
+	it("includes internal when the account supports it", () => {
+		expect(
+			getManageVisibilityTargetOptions(true).map((option) => option.value)
+		).toEqual(["public", "private", "internal"]);
 	});
 });
 

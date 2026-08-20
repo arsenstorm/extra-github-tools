@@ -2,7 +2,14 @@ import type {
 	ManageRepositoryArchiveAction,
 	ManageRepositorySubscriptionAction,
 	ManageRepositoryVisibilityAction,
+	RepositorySubscriptionState,
+	RepositoryVisibility,
 } from "@/github";
+
+export type ManageRepositoryArchiveState = Exclude<
+	ManageRepositoryArchiveAction,
+	"current"
+>;
 
 export type ManageRepositoryStatus =
 	| "failed"
@@ -71,4 +78,54 @@ export const MANAGE_SUBSCRIPTION_ACTION_OPTIONS = [
 ] as const satisfies ReadonlyArray<{
 	label: string;
 	value: ManageRepositorySubscriptionAction;
+}>;
+
+export const MANAGE_ARCHIVE_TARGET_OPTIONS = [
+	{
+		label: "Active",
+		value: "unarchived",
+	},
+	{
+		label: "Archived",
+		value: "archived",
+	},
+] as const satisfies ReadonlyArray<{
+	label: string;
+	value: ManageRepositoryArchiveState;
+}>;
+
+export const MANAGE_VISIBILITY_TARGET_OPTIONS = [
+	{
+		label: "Public",
+		value: "public",
+	},
+	{
+		label: "Private",
+		value: "private",
+	},
+	{
+		label: "Internal",
+		value: "internal",
+	},
+] as const satisfies ReadonlyArray<{
+	label: string;
+	value: RepositoryVisibility;
+}>;
+
+export const MANAGE_SUBSCRIPTION_TARGET_OPTIONS = [
+	{
+		label: "Watching",
+		value: "watching",
+	},
+	{
+		label: "Not watching",
+		value: "unwatching",
+	},
+	{
+		label: "Ignoring",
+		value: "ignoring",
+	},
+] as const satisfies ReadonlyArray<{
+	label: string;
+	value: RepositorySubscriptionState;
 }>;

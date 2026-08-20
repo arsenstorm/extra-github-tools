@@ -1,5 +1,6 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 import PageHeading from "@/components/page-heading";
 import { GitHubAccessGate } from "@/components/repositories/gate";
 import {
@@ -23,6 +24,7 @@ import type {
 	ManagePageData,
 	ManageRepositoriesResult,
 	ManageRepositoryChangeInput,
+	ManageWatchedRepositoriesResult,
 } from "@/server-functions";
 import { AccountManagePanel } from "./account-manage-panel";
 import { ManageActionBar } from "./manage-action-bar";
@@ -30,7 +32,7 @@ import { ManageEditDialog } from "./manage-edit-dialog";
 import { ManageResultsPanel } from "./manage-results-panel";
 import { ManageStartState } from "./manage-start-state";
 import { RepositoriesTable } from "./repositories-table";
-import { showManageResultToast } from "./utils";
+import { getManageResultDetails, showManageResultToast } from "./utils";
 
 const MANAGE_CHUNK_SIZE = 10;
 
@@ -55,6 +57,7 @@ export function ManagePageContent({
 	hasGitHubAccess,
 	isLoadingManageData,
 	isSignedIn,
+	onLoadWatchedRepositories,
 	onManageChunk,
 	onResetFlow,
 	onRunComplete,
@@ -65,6 +68,7 @@ export function ManagePageContent({
 	hasGitHubAccess: boolean;
 	isLoadingManageData: boolean;
 	isSignedIn: boolean;
+	onLoadWatchedRepositories: () => Promise<ManageWatchedRepositoriesResult>;
 	onManageChunk: (
 		changes: ManageRepositoryChangeInput[]
 	) => Promise<ManageRepositoriesResult>;
@@ -88,15 +92,20 @@ export function ManagePageContent({
 		ManageRepositoryResult[] | null
 	>(null);
 	const [pendingRepositories, setPendingRepositories] = useState<string[]>([]);
+	const [singleEditRepositories, setSingleEditRepositories] = useState<
+		string[]
+	>([]);
+	const [inlineResults, setInlineResults] = useState<
+		Map<string, ManageRepositoryResult>
+	>(new Map());
+	const [watchedRepositorySet, setWatchedRepositorySet] =
+		useState<Set<string> | null>(null);
+	const [watchedRefreshKey, setWatchedRefreshKey] = useState(0);
 	const closingEditTargetsRef = useRef<GitHubRepository[]>([]);
 
 	const repositories = useMemo(
 		() => pageData.repositories ?? [],
 		[pageData.repositories]
-	);
-	const watchedRepositorySet = useMemo(
-		() => new Set(pageData.watchedRepositories ?? []),
-		[pageData.watchedRepositories]
 	);
 	const {
 		currentPage,
@@ -144,20 +153,22 @@ export function ManagePageContent({
 	}
 
 	const pendingRepositorySet = useMemo(
-		() => new Set(pendingRepositories),
-		[pendingRepositories]
+		() => new Set([...pendingRepositories, ...singleEditRepositories]),
+		[pendingRepositories, singleEditRepositories]
 	);
 	const selectedRepositorySet = useMemo(
 		() => new Set(selectedRepositories),
 		[selectedRepositories]
 	);
-	const resultsByRepository = useMemo(
-		() =>
-			new Map(
-				manageResults?.map((result) => [result.repository, result]) ?? []
-			),
-		[manageResults]
-	);
+	const resultsByRepository = useMemo(() => {
+		const mergedResults = new Map(inlineResults);
+
+		for (const result of manageResults ?? []) {
+			mergedResults.set(result.repository, result);
+		}
+
+		return mergedResults;
+	}, [inlineResults, manageResults]);
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: reset local flow state when the selected account changes.
 	useEffect(() => {
@@ -169,8 +180,36 @@ export function ManagePageContent({
 		setLastRunActions(null);
 		setManageResults(null);
 		setPendingRepositories([]);
+		setSingleEditRepositories([]);
+		setInlineResults(new Map());
+		setWatchedRepositorySet(null);
 		resetList();
 	}, [account]);
+
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the loader prop is inline and would restart the fetch on every render.
+	useEffect(() => {
+		if (!account) {
+			return;
+		}
+
+		let isCurrentAccount = true;
+
+		const loadWatchedRepositories = async (): Promise<void> => {
+			const result = await onLoadWatchedRepositories();
+
+			if (isCurrentAccount && result.watchedRepositories) {
+				setWatchedRepositorySet(new Set(result.watchedRepositories));
+			}
+		};
+
+		loadWatchedRepositories().catch(() => {
+			// The notification column stays unknown when the sweep fails.
+		});
+
+		return () => {
+			isCurrentAccount = false;
+		};
+	}, [account, watchedRefreshKey]);
 
 	// The three actions and the confirmation reset when the dialog opens, so
 	// closing leaves the dialog contents alone while it fades out.
@@ -221,6 +260,51 @@ export function ManagePageContent({
 			return changeInput;
 		});
 
+	const refreshWatchedRepositories = (
+		results: ManageRepositoryResult[]
+	): void => {
+		if (results.some((result) => result.subscription !== null)) {
+			setWatchedRefreshKey((previousKey) => previousKey + 1);
+		}
+	};
+
+	const runSingleChange = async (
+		change: ManageRepositoryChangeInput
+	): Promise<void> => {
+		setSingleEditRepositories((previous) => [...previous, change.repository]);
+		setInlineResults((previous) => {
+			const next = new Map(previous);
+			next.delete(change.repository);
+
+			return next;
+		});
+
+		try {
+			const result = await onManageChunk([change]);
+			const repositoryResult = result.results?.[0];
+
+			if (!repositoryResult) {
+				toast.error(result.error ?? "Failed to update the repository.");
+				return;
+			}
+
+			setInlineResults((previous) =>
+				new Map(previous).set(change.repository, repositoryResult)
+			);
+			refreshWatchedRepositories([repositoryResult]);
+
+			if (repositoryResult.ok) {
+				await onRunComplete(true);
+			} else {
+				toast.error(getManageResultDetails(repositoryResult));
+			}
+		} finally {
+			setSingleEditRepositories((previous) =>
+				previous.filter((name) => name !== change.repository)
+			);
+		}
+	};
+
 	const handleManage = async (): Promise<void> => {
 		const changeInputs = buildChangeInputs();
 		const hasChosenAction =
@@ -236,6 +320,7 @@ export function ManagePageContent({
 		closeEditDialog();
 		setIsManaging(true);
 		setManageResults(null);
+		setInlineResults(new Map());
 		setPendingRepositories(changeInputs.map((change) => change.repository));
 
 		const collectedResults: ManageRepositoryResult[] = [];
@@ -267,6 +352,7 @@ export function ManagePageContent({
 		}
 
 		showManageResultToast(collectedResults, runError);
+		refreshWatchedRepositories(collectedResults);
 		await onRunComplete(
 			collectedResults.some((result) =>
 				[result.archive, result.subscription, result.visibility].some(
@@ -326,6 +412,7 @@ export function ManagePageContent({
 								<RepositoriesTable
 									filteredRepositories={paginatedRepositories}
 									isManaging={isManaging}
+									onApplyChange={runSingleChange}
 									onEditRepository={(repositoryName) =>
 										openEditDialog([repositoryName])
 									}
@@ -333,6 +420,9 @@ export function ManagePageContent({
 									pendingRepositories={pendingRepositorySet}
 									resultsByRepository={resultsByRepository}
 									selectedRepositories={selectedRepositorySet}
+									supportsInternalVisibility={
+										pageData.supportsInternalVisibility
+									}
 									watchedRepositories={watchedRepositorySet}
 								/>
 								<RepositoryPagination
