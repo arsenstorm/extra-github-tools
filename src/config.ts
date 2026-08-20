@@ -3,9 +3,13 @@ interface FeatureFlag {
 }
 
 export const CONFIG: {
+	bulkManageRepositories: FeatureFlag;
 	bulkTransferRepositories: FeatureFlag;
 	commitFame: FeatureFlag;
 } = {
+	bulkManageRepositories: {
+		enabled: true,
+	},
 	bulkTransferRepositories: {
 		enabled: true,
 	},

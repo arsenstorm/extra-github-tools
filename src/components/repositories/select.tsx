@@ -1,4 +1,4 @@
-export function RepositoryTransferSelect<T extends string>({
+export function RepositorySelect<T extends string>({
 	ariaLabel,
 	className = "mt-2",
 	disabled,

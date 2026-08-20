@@ -1,40 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import PageHeading from "@/components/page-heading";
-import { Button, type Colors } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Divider } from "@/components/ui/divider";
 import { Subheading } from "@/components/ui/heading";
 import { Strong, Text, TextLink } from "@/components/ui/text";
-import { CONFIG } from "@/config";
-
-const options: {
-	enabled?: boolean;
-	description: string;
-	label: string;
-	link: { color: Colors; href: string; label: string };
-}[] = [
-	{
-		description:
-			"Move your repositories in bulk between organizations and personal accounts.",
-		enabled: CONFIG.bulkTransferRepositories.enabled,
-		label: "Bulk Transfer Repositories",
-		link: {
-			color: "cyan",
-			href: "/transfer",
-			label: "Bulk Transfer Repositories",
-		},
-	},
-	{
-		description:
-			"See how your commits compare to your colleagues and who's doing more.",
-		enabled: CONFIG.commitFame.enabled,
-		label: "Commit Fame",
-		link: {
-			color: "amber",
-			href: "/fame",
-			label: "Commit Fame",
-		},
-	},
-];
+import { TOOL_LIST } from "@/tools";
 
 export const Route = createFileRoute("/")({
 	component: HomePage,
@@ -45,20 +15,18 @@ function HomePage() {
 		<div className="flex h-full flex-col justify-center">
 			<PageHeading />
 			<main className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-				{options
-					.filter((option) => option.enabled ?? true)
-					.map(({ description, label, link }) => (
-						<div
-							className="flex flex-col rounded-lg bg-zinc-200 p-4 ring-2 ring-zinc-300 dark:bg-zinc-800 dark:ring-zinc-700"
-							key={label}
-						>
-							<Subheading level={3}>{label}</Subheading>
-							<Text>{description}</Text>
-							<Button className="mt-4" color={link.color} href={link.href}>
-								{link.label}
-							</Button>
-						</div>
-					))}
+				{TOOL_LIST.filter((tool) => tool.enabled).map((tool) => (
+					<div
+						className="flex flex-col rounded-lg bg-zinc-200 p-4 ring-2 ring-zinc-300 dark:bg-zinc-800 dark:ring-zinc-700"
+						key={tool.href}
+					>
+						<Subheading level={3}>{tool.title}</Subheading>
+						<Text>{tool.description}</Text>
+						<Button className="mt-4" color={tool.color} href={tool.href}>
+							{tool.title}
+						</Button>
+					</div>
+				))}
 			</main>
 			<Divider className="my-6" />
 			<div className="flex max-w-2xl flex-col gap-y-4">

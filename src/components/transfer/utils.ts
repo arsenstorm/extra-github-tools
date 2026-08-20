@@ -1,84 +1,8 @@
 import { toast } from "sonner";
-import type { GitHubRepository, TransferRepositoryResult } from "@/github";
+import { formatCount, formatRepositoryCount } from "@/format";
+import type { TransferRepositoryResult } from "@/github/types";
 import type { TransferRepositoriesResult } from "@/server-functions";
-import type {
-	RepositorySort,
-	RepositoryStatus,
-	RepositoryTransferOptions,
-} from "./types";
-
-export const getGitHubAccessRefreshDescription = (): string =>
-	"Your session is active, but GitHub access is unavailable. Sign in with GitHub again to continue.";
-
-export const formatRepositoryPushedAt = (pushedAt: string | null): string => {
-	if (!pushedAt) {
-		return "Never pushed";
-	}
-
-	return new Intl.DateTimeFormat("en", {
-		day: "numeric",
-		month: "short",
-		timeZone: "UTC",
-		year: "numeric",
-	}).format(new Date(pushedAt));
-};
-
-const getRepositoryPushedAtTimestamp = (pushedAt: string | null): number => {
-	if (!pushedAt) {
-		return 0;
-	}
-
-	const timestamp = Date.parse(pushedAt);
-
-	return Number.isNaN(timestamp) ? 0 : timestamp;
-};
-
-const compareRepositoryNames = (
-	firstRepository: GitHubRepository,
-	secondRepository: GitHubRepository
-): number => firstRepository.name.localeCompare(secondRepository.name);
-
-export const sortRepositories = (
-	repositories: GitHubRepository[],
-	repositorySort: RepositorySort
-): GitHubRepository[] => {
-	if (repositorySort === "default") {
-		return repositories;
-	}
-
-	const direction = repositorySort === "pushed-desc" ? -1 : 1;
-
-	return [...repositories].sort((firstRepository, secondRepository) => {
-		const pushedAtDifference =
-			(getRepositoryPushedAtTimestamp(firstRepository.pushedAt) -
-				getRepositoryPushedAtTimestamp(secondRepository.pushedAt)) *
-			direction;
-
-		return (
-			pushedAtDifference ||
-			compareRepositoryNames(firstRepository, secondRepository)
-		);
-	});
-};
-
-export const getSelectedRepositoryNames = (
-	repositoryNames: Iterable<string>,
-	repositories: GitHubRepository[]
-): string[] => {
-	const selectedRepositoryNames = new Set(repositoryNames);
-
-	return repositories
-		.filter((repository) => selectedRepositoryNames.has(repository.name))
-		.map((repository) => repository.name);
-};
-
-export const getRepositoryPageCount = (
-	repositoryCount: number,
-	repositoriesPerPage: number
-): number => Math.max(1, Math.ceil(repositoryCount / repositoriesPerPage));
-
-export const clampRepositoryPage = (page: number, pageCount: number): number =>
-	Math.min(Math.max(page, 1), pageCount);
+import type { RepositoryStatus, RepositoryTransferOptions } from "./types";
 
 export const getRepositoryStatus = (
 	repositoryName: string,
@@ -171,12 +95,6 @@ export const isTransferResultComplete = (
 	result: TransferRepositoryResult
 ): boolean => result.ok && result.postTransferSettings?.ok !== false;
 
-const getCountLabel = (
-	count: number,
-	singularLabel: string,
-	pluralLabel: string
-): string => `${count} ${count === 1 ? singularLabel : pluralLabel}`;
-
 const getTransferFailureToastMessage = (
 	failedCount: number,
 	settingsFailedCount: number
@@ -185,13 +103,13 @@ const getTransferFailureToastMessage = (
 
 	if (failedCount > 0) {
 		failureMessages.push(
-			`${getCountLabel(failedCount, "repository", "repositories")} failed to transfer`
+			`${formatRepositoryCount(failedCount)} failed to transfer`
 		);
 	}
 
 	if (settingsFailedCount > 0) {
 		failureMessages.push(
-			`${getCountLabel(
+			`${formatCount(
 				settingsFailedCount,
 				"settings update",
 				"settings updates"
@@ -228,13 +146,7 @@ export const showTransferResultToast = (
 		getTransferResultCounts(result);
 
 	if (result.success) {
-		toast.success(
-			`${getCountLabel(
-				transferredCount,
-				"repository",
-				"repositories"
-			)} transferred.`
-		);
+		toast.success(`${formatRepositoryCount(transferredCount)} transferred.`);
 		return;
 	}
 

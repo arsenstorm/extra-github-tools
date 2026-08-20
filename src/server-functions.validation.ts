@@ -1,11 +1,21 @@
 import {
+	MANAGE_REPOSITORY_ARCHIVE_ACTIONS,
+	MANAGE_REPOSITORY_SUBSCRIPTION_ACTIONS,
+	MANAGE_REPOSITORY_VISIBILITY_ACTIONS,
+	type ManageRepositoryArchiveAction,
+	type ManageRepositorySubscriptionAction,
+	type ManageRepositoryVisibilityAction,
 	TRANSFER_REPOSITORY_ARCHIVE_STATES,
 	TRANSFER_REPOSITORY_VISIBILITIES,
 	type TransferRepositoryArchiveState,
 	type TransferRepositoryVisibility,
-} from "./github";
+} from "./github/types";
 import type {
 	FameSearchInput,
+	GitHubAccountsInput,
+	ManageRepositoriesInput,
+	ManageRepositoryChangeInput,
+	RepositoriesPageInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
 } from "./server-functions";
@@ -59,6 +69,30 @@ const isTransferRepositoryVisibility = (
 		value as TransferRepositoryVisibility
 	);
 
+const isManageRepositoryArchiveAction = (
+	value: unknown
+): value is ManageRepositoryArchiveAction =>
+	typeof value === "string" &&
+	MANAGE_REPOSITORY_ARCHIVE_ACTIONS.includes(
+		value as ManageRepositoryArchiveAction
+	);
+
+const isManageRepositoryVisibilityAction = (
+	value: unknown
+): value is ManageRepositoryVisibilityAction =>
+	typeof value === "string" &&
+	MANAGE_REPOSITORY_VISIBILITY_ACTIONS.includes(
+		value as ManageRepositoryVisibilityAction
+	);
+
+const isManageRepositorySubscriptionAction = (
+	value: unknown
+): value is ManageRepositorySubscriptionAction =>
+	typeof value === "string" &&
+	MANAGE_REPOSITORY_SUBSCRIPTION_ACTIONS.includes(
+		value as ManageRepositorySubscriptionAction
+	);
+
 export const validateTransferSearchInput = (
 	data: TransferSearchInput
 ): TransferSearchInput => {
@@ -98,5 +132,101 @@ export const validateTransferRepositoriesInput = (
 		visibility: isTransferRepositoryVisibility(input.visibility)
 			? input.visibility
 			: "current",
+	};
+};
+
+const toViewer = (value: unknown): GitHubAccountsInput["viewer"] => {
+	const viewer =
+		toUnknownRecord<NonNullable<GitHubAccountsInput["viewer"]>>(value);
+	const login = normalizeOptionalString(viewer.login);
+	const avatarUrl = normalizeOptionalString(viewer.avatarUrl);
+
+	if (!(login && avatarUrl && typeof viewer.id === "number")) {
+		return;
+	}
+
+	return { avatarUrl, id: viewer.id, login };
+};
+
+export const validateGitHubAccountsInput = (
+	data: GitHubAccountsInput | undefined
+): GitHubAccountsInput => {
+	const input = toUnknownRecord<GitHubAccountsInput>(data);
+
+	return { viewer: toViewer(input.viewer) };
+};
+
+export const validateRepositoriesPageInput = (
+	data: RepositoriesPageInput
+): RepositoriesPageInput => {
+	const input = toUnknownRecord<RepositoriesPageInput>(data);
+
+	return {
+		account: toTrimmedString(input.account),
+		cursor: normalizeOptionalString(input.cursor),
+		viewerLogin: normalizeOptionalString(input.viewerLogin),
+	};
+};
+
+const toManageRepositoryChanges = (
+	value: unknown
+): ManageRepositoryChangeInput[] => {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+
+	const changes: ManageRepositoryChangeInput[] = [];
+	const seenRepositories = new Set<string>();
+
+	for (const item of value) {
+		const input = toUnknownRecord<ManageRepositoryChangeInput>(item);
+		const repository = toTrimmedString(input.repository);
+
+		if (!repository || seenRepositories.has(repository)) {
+			continue;
+		}
+
+		const archiveAction = isManageRepositoryArchiveAction(input.archiveAction)
+			? input.archiveAction
+			: "current";
+		const subscriptionAction = isManageRepositorySubscriptionAction(
+			input.subscriptionAction
+		)
+			? input.subscriptionAction
+			: "current";
+		const visibilityAction = isManageRepositoryVisibilityAction(
+			input.visibilityAction
+		)
+			? input.visibilityAction
+			: "current";
+
+		if (
+			archiveAction === "current" &&
+			subscriptionAction === "current" &&
+			visibilityAction === "current"
+		) {
+			continue;
+		}
+
+		seenRepositories.add(repository);
+		changes.push({
+			archiveAction,
+			repository,
+			subscriptionAction,
+			visibilityAction,
+		});
+	}
+
+	return changes;
+};
+
+export const validateManageRepositoriesInput = (
+	data: ManageRepositoriesInput
+): ManageRepositoriesInput => {
+	const input = toUnknownRecord<ManageRepositoriesInput>(data);
+
+	return {
+		account: toTrimmedString(input.account),
+		changes: toManageRepositoryChanges(input.changes),
 	};
 };

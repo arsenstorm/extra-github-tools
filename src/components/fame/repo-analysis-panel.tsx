@@ -6,7 +6,7 @@ import {
 	CardTitle,
 } from "@/components/ui/card";
 import { Text } from "@/components/ui/text";
-import type { RepoStats } from "@/github";
+import type { RepoStats } from "@/github/types";
 import { OverviewMetric } from "./overview-metric";
 
 export function RepoAnalysisPanel({

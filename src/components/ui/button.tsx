@@ -7,6 +7,7 @@ import {
 import { Link } from "@tanstack/react-router";
 import { clsx } from "clsx";
 import type React from "react";
+import { Link as HrefLink } from "./link";
 
 const styles = {
 	base: [
@@ -188,9 +189,9 @@ export const Button = function Button({
 
 	if ("href" in props) {
 		return (
-			<a {...props} className={classes}>
+			<HrefLink {...props} className={classes}>
 				<TouchTarget>{children}</TouchTarget>
-			</a>
+			</HrefLink>
 		);
 	}
 

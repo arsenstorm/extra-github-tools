@@ -55,6 +55,9 @@ export const Route = createRootRoute({
 	}),
 	loader: () => getRootLayoutData(),
 	shellComponent: RootDocument,
+	// Sign-in and sign-out are full page loads, so the session only needs to be
+	// read once per document; child invalidations must not refetch it.
+	staleTime: Number.POSITIVE_INFINITY,
 });
 
 function RootLayout() {

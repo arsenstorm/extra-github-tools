@@ -1,5 +1,6 @@
 import { auth, getGitHubClientId } from "./auth";
-import { type GitHubViewer, getGitHubViewer } from "./github";
+import { getGitHubViewer } from "./github/accounts";
+import type { GitHubViewer } from "./github/types";
 
 export interface SessionSummary {
 	user: {

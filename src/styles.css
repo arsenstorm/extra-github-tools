@@ -17,6 +17,16 @@
 	src: url("/fonts/GeistMonoVF.woff") format("woff");
 }
 
+/* Thin, translucent scrollbar that follows the text color in each theme. */
+@utility scrollbar-subtle {
+	scrollbar-color: --alpha(var(--color-zinc-950) / 20%) transparent;
+	scrollbar-width: thin;
+
+	@variant dark {
+		scrollbar-color: --alpha(var(--color-white) / 20%) transparent;
+	}
+}
+
 @theme {
 	--font-mono: "Geist Mono", ui-monospace, SFMono-Regular, monospace;
 	--font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
@@ -34,10 +44,6 @@ html,
 body,
 #app {
 	min-height: 100%;
-}
-
-html {
-	background-color: white;
 }
 
 body {

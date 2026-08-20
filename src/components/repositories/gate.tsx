@@ -1,7 +1,9 @@
 import RequireSignIn from "@/components/require-sign-in";
-import { getGitHubAccessRefreshDescription } from "./utils";
 
-export function TransferGate({
+const GITHUB_ACCESS_REFRESH_DESCRIPTION =
+	"Your session is active, but GitHub access is unavailable. Sign in with GitHub again to continue.";
+
+export function GitHubAccessGate({
 	children,
 	hasGitHubAccess,
 	isSignedIn,
@@ -17,7 +19,7 @@ export function TransferGate({
 	if (!hasGitHubAccess) {
 		return (
 			<RequireSignIn
-				description={getGitHubAccessRefreshDescription()}
+				description={GITHUB_ACCESS_REFRESH_DESCRIPTION}
 				title="GitHub access needs refreshing"
 			/>
 		);

@@ -83,7 +83,7 @@ export function StackedLayout({
 	const [showSidebar, setShowSidebar] = useState(false);
 
 	return (
-		<div className="relative flex min-h-svh w-full flex-col bg-white lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
+		<div className="relative flex h-svh w-full flex-col bg-white lg:bg-zinc-100 dark:bg-zinc-900 dark:lg:bg-zinc-950">
 			{/* Sidebar on mobile */}
 			<MobileSidebar close={() => setShowSidebar(false)} open={showSidebar}>
 				{sidebar}
@@ -103,8 +103,11 @@ export function StackedLayout({
 			</header>
 
 			{/* Content */}
-			<main className="flex flex-1 flex-col pb-2 lg:px-2">
-				<div className="grow p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-sm lg:ring-2 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10">
+			<main className="flex min-h-0 flex-1 flex-col pb-2 lg:px-2">
+				<div
+					className="scrollbar-subtle scrollbar-gutter-stable grow overflow-y-auto p-6 lg:rounded-lg lg:bg-white lg:p-10 lg:shadow-sm lg:ring-2 lg:ring-zinc-950/5 dark:lg:bg-zinc-900 dark:lg:ring-white/10"
+					data-scroll-restoration-id="main-content"
+				>
 					<div className="mx-auto max-w-6xl">{children}</div>
 				</div>
 			</main>

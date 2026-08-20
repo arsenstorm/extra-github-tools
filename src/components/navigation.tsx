@@ -41,6 +41,11 @@ const navItems: { enabled?: boolean; label: string; to: string }[] = [
 		to: "/transfer" as const,
 	},
 	{
+		enabled: CONFIG.bulkManageRepositories.enabled,
+		label: "Bulk Manage Repositories",
+		to: "/manage" as const,
+	},
+	{
 		enabled: CONFIG.commitFame.enabled,
 		label: "Commit Fame",
 		to: "/fame" as const,

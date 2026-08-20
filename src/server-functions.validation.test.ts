@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type {
 	FameSearchInput,
+	ManageRepositoriesInput,
+	RepositoriesPageInput,
 	TransferRepositoriesInput,
 	TransferSearchInput,
 } from "./server-functions";
 import {
 	validateFameSearchInput,
+	validateManageRepositoriesInput,
+	validateRepositoriesPageInput,
 	validateTransferRepositoriesInput,
 	validateTransferSearchInput,
 } from "./server-functions.validation";
@@ -132,5 +136,168 @@ describe("validateFameSearchInput", () => {
 				repo: 3,
 			} as unknown as FameSearchInput)
 		).toEqual({ org: "org", repo: undefined });
+	});
+});
+
+const asManageInput = (value: unknown): ManageRepositoriesInput =>
+	value as ManageRepositoriesInput;
+
+const emptyManageInput: ManageRepositoriesInput = {
+	account: "",
+	changes: [],
+};
+
+describe("validateManageRepositoriesInput", () => {
+	it("trims account", () => {
+		expect(
+			validateManageRepositoriesInput({
+				account: " acme ",
+				changes: [],
+			})
+		).toEqual({
+			account: "acme",
+			changes: [],
+		});
+	});
+
+	it("treats non-string account and non-array changes as empty", () => {
+		expect(
+			validateManageRepositoriesInput(
+				asManageInput({
+					account: 42,
+					changes: "nope",
+				})
+			)
+		).toEqual(emptyManageInput);
+	});
+
+	it("does not throw on null or non-object input", () => {
+		expect(validateManageRepositoriesInput(asManageInput(null))).toEqual(
+			emptyManageInput
+		);
+		expect(validateManageRepositoriesInput(asManageInput("string"))).toEqual(
+			emptyManageInput
+		);
+	});
+
+	it("dedupes changes by repository, first occurrence wins", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ archiveAction: "archived", repository: " repo " },
+					{ repository: "repo", visibilityAction: "internal" },
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([
+			{
+				archiveAction: "archived",
+				repository: "repo",
+				subscriptionAction: "current",
+				visibilityAction: "current",
+			},
+		]);
+	});
+
+	it("drops entries with a blank repository", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ archiveAction: "archived", repository: "  " },
+					{ archiveAction: "archived", repository: 42 },
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("drops entries where all actions are 'current'", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{ repository: "repo" },
+					{
+						archiveAction: "current",
+						repository: "other",
+						subscriptionAction: "current",
+						visibilityAction: "current",
+					},
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("falls back to current for unknown action values, dropping the entry if that leaves it all-current", () => {
+		const result = validateManageRepositoriesInput(
+			asManageInput({
+				account: "acme",
+				changes: [
+					{
+						archiveAction: "banana",
+						repository: "repo",
+						subscriptionAction: "banana",
+						visibilityAction: "banana",
+					},
+				],
+			})
+		);
+
+		expect(result.changes).toEqual([]);
+	});
+
+	it("keeps valid mixed action values with all three fields present", () => {
+		const result = validateManageRepositoriesInput({
+			account: "acme",
+			changes: [
+				{
+					archiveAction: "archived",
+					repository: "repo",
+					subscriptionAction: "ignoring",
+					visibilityAction: "internal",
+				},
+			],
+		});
+
+		expect(result.changes).toEqual([
+			{
+				archiveAction: "archived",
+				repository: "repo",
+				subscriptionAction: "ignoring",
+				visibilityAction: "internal",
+			},
+		]);
+	});
+});
+
+describe("validateRepositoriesPageInput", () => {
+	it("trims the account and viewer login", () => {
+		expect(
+			validateRepositoriesPageInput({
+				account: " acme ",
+				viewerLogin: " octocat ",
+			})
+		).toEqual({ account: "acme", cursor: undefined, viewerLogin: "octocat" });
+	});
+
+	it("ignores non-string values", () => {
+		expect(
+			validateRepositoriesPageInput({
+				account: 1,
+				viewerLogin: 2,
+			} as unknown as RepositoriesPageInput)
+		).toEqual({ account: "", cursor: undefined, viewerLogin: undefined });
+	});
+
+	it("does not throw on non-object input", () => {
+		expect(
+			validateRepositoriesPageInput(null as unknown as RepositoriesPageInput)
+		).toEqual({ account: "", cursor: undefined, viewerLogin: undefined });
 	});
 });

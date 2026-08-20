@@ -1,8 +1,9 @@
-import PageHeading from "@/components/page-heading";
+import { GitHubAccessGate } from "@/components/repositories/gate";
+import { ToolPage } from "@/components/tool-page";
 import { Divider } from "@/components/ui/divider";
 import { Strong, Text } from "@/components/ui/text";
 import type { FamePageData } from "@/server-functions";
-import { FameGate } from "./fame-gate";
+import { TOOLS } from "@/tools";
 import { OrganizationsTable } from "./organizations-table";
 import { RepoAnalysisPanel } from "./repo-analysis-panel";
 import { RepositoriesTable } from "./repositories-table";
@@ -25,21 +26,20 @@ export function FamePageContent({
 	repo?: string;
 }>) {
 	return (
-		<div className="flex h-full flex-col justify-center">
-			<PageHeading
-				description="See how your commits compare to your colleagues and who's doing more."
-				title="Commit Fame"
-			/>
+		<ToolPage tool={TOOLS.fame}>
 			{org ? null : (
 				<>
 					<Text>Select the organization or user account to analyze.</Text>
 					<Divider className="my-6" />
-					<FameGate hasGitHubAccess={hasGitHubAccess} isSignedIn={isSignedIn}>
+					<GitHubAccessGate
+						hasGitHubAccess={hasGitHubAccess}
+						isSignedIn={isSignedIn}
+					>
 						<OrganizationsTable
 							accounts={pageData.organizations}
 							onSelect={onSelectOrganization}
 						/>
-					</FameGate>
+					</GitHubAccessGate>
 				</>
 			)}
 			{org && !repo ? (
@@ -48,16 +48,22 @@ export function FamePageContent({
 						Select a repository from <Strong>{org}</Strong> to analyze.
 					</Text>
 					<Divider className="my-6" />
-					<FameGate hasGitHubAccess={hasGitHubAccess} isSignedIn={isSignedIn}>
+					<GitHubAccessGate
+						hasGitHubAccess={hasGitHubAccess}
+						isSignedIn={isSignedIn}
+					>
 						<RepositoriesTable
 							onSelect={onSelectRepository}
 							repositories={pageData.repositories}
 						/>
-					</FameGate>
+					</GitHubAccessGate>
 				</>
 			) : null}
 			{org && repo ? (
-				<FameGate hasGitHubAccess={hasGitHubAccess} isSignedIn={isSignedIn}>
+				<GitHubAccessGate
+					hasGitHubAccess={hasGitHubAccess}
+					isSignedIn={isSignedIn}
+				>
 					<RepoAnalysisPanel
 						error={pageData.error}
 						org={org}
@@ -65,8 +71,8 @@ export function FamePageContent({
 						stats={pageData.stats}
 						statsPending={pageData.statsPending}
 					/>
-				</FameGate>
+				</GitHubAccessGate>
 			) : null}
-		</div>
+		</ToolPage>
 	);
 }
