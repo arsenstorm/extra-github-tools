@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSelectedRepositoryNames } from "@/components/repositories/list-utils";
+import {
+	getFailedRepositoryNames,
+	getSelectedRepositoryNames,
+	getSucceededRepositoryNames,
+} from "@/components/repositories/list-utils";
 import {
 	type RepositoryListState,
 	useRepositoryList,
@@ -13,14 +17,6 @@ import {
 	DEFAULT_TRANSFER_OPTIONS,
 	type RepositoryTransferOptions,
 } from "./types";
-
-const getRepositoryNames = (
-	results: TransferRepositoryResult[],
-	ok: boolean
-): string[] =>
-	results
-		.filter((result) => result.ok === ok)
-		.map((result) => result.repository);
 
 export interface TransferFlow {
 	closeReview: () => void;
@@ -132,9 +128,8 @@ export function useTransferFlow({
 			closeReview();
 
 			if (result.results) {
-				const transferredRepositories = getRepositoryNames(
-					result.results,
-					true
+				const transferredRepositories = getSucceededRepositoryNames(
+					result.results
 				);
 
 				setHiddenTransferredRepositories((previousRepositories) => [
@@ -142,7 +137,7 @@ export function useTransferFlow({
 				]);
 				list.setSelectedRepositories(
 					getSelectedRepositoryNames(
-						getRepositoryNames(result.results, false),
+						getFailedRepositoryNames(result.results),
 						repositories
 					)
 				);
@@ -158,7 +153,7 @@ export function useTransferFlow({
 			return;
 		}
 
-		list.setSelectedRepositories(getRepositoryNames(transferResults, false));
+		list.setSelectedRepositories(getFailedRepositoryNames(transferResults));
 		setConfirmationValue("");
 		setIsReviewing(true);
 	};

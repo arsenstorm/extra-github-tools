@@ -1,6 +1,7 @@
 import { Deferred } from "./deferred";
 import { RepositoryStartState } from "./start-state";
-import { RepositoriesTableSkeleton, type TableColumn } from "./table-skeleton";
+import type { TableColumn } from "./table-head";
+import { RepositoriesTableSkeleton } from "./table-skeleton";
 
 /**
  * The body of a repository tool: an inert toolbar while nothing is loaded,

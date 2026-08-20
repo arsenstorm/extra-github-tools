@@ -1,3 +1,4 @@
+import clsx from "clsx";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Strong, Text } from "@/components/ui/text";
@@ -73,55 +74,97 @@ export function RepositoryPagination({
 		);
 	}
 
-	const visibleStart = visibleStartIndex + 1;
-
 	// A 1fr | auto | 1fr grid keeps the page controls centred no matter how
 	// wide the summary or the rows-per-page picker is, and tabular digits keep
 	// the numbers from nudging their neighbours as they change.
 	return (
 		<div className="grid grid-cols-1 items-center gap-3 tabular-nums sm:grid-cols-[1fr_auto_1fr]">
 			<Text>
-				Showing <Strong>{visibleStart}</Strong> to{" "}
+				Showing <Strong>{visibleStartIndex + 1}</Strong> to{" "}
 				<Strong>{visibleEndIndex}</Strong> of{" "}
 				<Strong>{totalRepositoryCount}</Strong> repositories.
 			</Text>
-			<div className="flex items-center gap-4 justify-self-center">
-				<Button
-					disabled={currentPage <= 1}
-					onClick={() => onChangePage(currentPage - 1)}
-					outline
-				>
-					<ChevronLeft data-slot="icon" />
-					Previous
-				</Button>
-				<Text className="min-w-[12ch] text-center">
-					Page <Strong>{currentPage}</Strong> of <Strong>{pageCount}</Strong>
-				</Text>
-				<Button
-					disabled={currentPage >= pageCount}
-					onClick={() => onChangePage(currentPage + 1)}
-					outline
-				>
-					Next
-					<ChevronRight data-slot="icon" />
-				</Button>
-			</div>
-			<label className="flex items-center gap-2 text-sm/6 text-zinc-700 sm:justify-self-end dark:text-zinc-300">
-				<span>Rows per page</span>
-				<select
-					className="dark:scheme-dark rounded-lg border border-zinc-950/10 bg-transparent py-1.5 pr-8 pl-2 text-zinc-950 focus:outline-2 focus:outline-blue-500 dark:border-white/10 dark:bg-white/5 dark:text-white"
-					onChange={(event) =>
-						onChangePageSize(Number(event.target.value) as RepositoriesPerPage)
-					}
-					value={pageSize}
-				>
-					{REPOSITORIES_PER_PAGE_OPTIONS.map((option) => (
-						<option key={option} value={option}>
-							{option}
-						</option>
-					))}
-				</select>
-			</label>
+			<PageControls
+				className="justify-self-center"
+				currentPage={currentPage}
+				onChangePage={onChangePage}
+				pageCount={pageCount}
+			/>
+			<RowsPerPageSelect
+				className="sm:justify-self-end"
+				onChange={onChangePageSize}
+				value={pageSize}
+			/>
 		</div>
+	);
+}
+
+function PageControls({
+	className,
+	currentPage,
+	onChangePage,
+	pageCount,
+}: Readonly<{
+	className?: string;
+	currentPage: number;
+	onChangePage: (page: number) => void;
+	pageCount: number;
+}>) {
+	return (
+		<div className={clsx("flex items-center gap-4", className)}>
+			<Button
+				disabled={currentPage <= 1}
+				onClick={() => onChangePage(currentPage - 1)}
+				outline
+			>
+				<ChevronLeft data-slot="icon" />
+				Previous
+			</Button>
+			<Text className="min-w-[12ch] text-center">
+				Page <Strong>{currentPage}</Strong> of <Strong>{pageCount}</Strong>
+			</Text>
+			<Button
+				disabled={currentPage >= pageCount}
+				onClick={() => onChangePage(currentPage + 1)}
+				outline
+			>
+				Next
+				<ChevronRight data-slot="icon" />
+			</Button>
+		</div>
+	);
+}
+
+function RowsPerPageSelect({
+	className,
+	onChange,
+	value,
+}: Readonly<{
+	className?: string;
+	onChange: (value: RepositoriesPerPage) => void;
+	value: RepositoriesPerPage;
+}>) {
+	return (
+		<label
+			className={clsx(
+				"flex items-center gap-2 text-sm/6 text-zinc-700 dark:text-zinc-300",
+				className
+			)}
+		>
+			<span>Rows per page</span>
+			<select
+				className="dark:scheme-dark rounded-lg border border-zinc-950/10 bg-transparent py-1.5 pr-8 pl-2 text-zinc-950 focus:outline-2 focus:outline-blue-500 dark:border-white/10 dark:bg-white/5 dark:text-white"
+				onChange={(event) =>
+					onChange(Number(event.target.value) as RepositoriesPerPage)
+				}
+				value={value}
+			>
+				{REPOSITORIES_PER_PAGE_OPTIONS.map((option) => (
+					<option key={option} value={option}>
+						{option}
+					</option>
+				))}
+			</select>
+		</label>
 	);
 }

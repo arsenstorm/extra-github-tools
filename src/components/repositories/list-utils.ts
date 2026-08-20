@@ -70,3 +70,57 @@ export const getRepositoryPageCount = (
 
 export const clampRepositoryPage = (page: number, pageCount: number): number =>
 	Math.min(Math.max(page, 1), pageCount);
+
+interface RepositoryOutcome {
+	ok: boolean;
+	repository: string;
+}
+
+export const getFailedRepositoryNames = (
+	results: RepositoryOutcome[] | null
+): string[] =>
+	(results ?? [])
+		.filter((result) => !result.ok)
+		.map((result) => result.repository);
+
+export const getSucceededRepositoryNames = (
+	results: RepositoryOutcome[]
+): string[] =>
+	results.filter((result) => result.ok).map((result) => result.repository);
+
+/** The visible names between the anchor and the target, inclusive; empty when either is off the page. */
+export const getRepositoryRange = (
+	visibleNames: string[],
+	anchorName: string | null,
+	targetName: string
+): string[] => {
+	// An absent anchor can't match a name, so indexOf yields -1.
+	const anchorIndex = visibleNames.indexOf(anchorName ?? "");
+	const targetIndex = visibleNames.indexOf(targetName);
+
+	if (anchorIndex < 0 || targetIndex < 0) {
+		return [];
+	}
+
+	return visibleNames.slice(
+		Math.min(anchorIndex, targetIndex),
+		Math.max(anchorIndex, targetIndex) + 1
+	);
+};
+
+/** Adds or removes every name, matching the target's new state. */
+export const toggleRepositoryNames = (
+	selection: Set<string>,
+	names: string[],
+	targetName: string
+): void => {
+	const shouldSelect = !selection.has(targetName);
+
+	for (const name of names) {
+		if (shouldSelect) {
+			selection.add(name);
+		} else {
+			selection.delete(name);
+		}
+	}
+};

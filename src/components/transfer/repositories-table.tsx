@@ -1,30 +1,18 @@
 import { memo, useState } from "react";
 import { RepositoryActionsMenu } from "@/components/repositories/actions-menu";
-import {
-	RepositoryBadge,
-	type RepositoryStatusTone,
-} from "@/components/repositories/badge";
-import { EmptyTableRow } from "@/components/repositories/empty-table-row";
+import { RepositoryBadge } from "@/components/repositories/badge";
 import { formatRepositoryPushedAt } from "@/components/repositories/list-utils";
 import {
-	getVisibleSelection,
 	SelectableRepositoryRow,
-	SelectableRowHeader,
 	stopEventPropagation,
 } from "@/components/repositories/selectable-row";
+import { SelectableRepositoriesTable } from "@/components/repositories/selectable-table";
 import {
-	ACTIONS_COLUMN_CLASS_NAME,
-	SkeletonRows,
-	type TableColumn,
-} from "@/components/repositories/table-skeleton";
-import {
-	Table,
-	TableBody,
-	TableCell,
-	TableHead,
-	TableHeader,
-	TableRow,
-} from "@/components/ui/table";
+	RepositoryStatusBadge,
+	type StatusBadgeStyle,
+} from "@/components/repositories/status-badge";
+import type { TableColumn } from "@/components/repositories/table-head";
+import { TableCell } from "@/components/ui/table";
 import { Strong, Text } from "@/components/ui/text";
 import type {
 	GitHubRepository,
@@ -40,11 +28,10 @@ export const TRANSFER_TABLE_COLUMNS: TableColumn[] = [
 	{ className: "w-32", label: "Last pushed" },
 	{ className: "w-32", label: "Status" },
 ];
-const TABLE_COLUMN_COUNT = TRANSFER_TABLE_COLUMNS.length + 2;
 
 const STATUS_BADGES: Record<
 	Exclude<RepositoryStatus, "idle">,
-	{ label: string; tone: RepositoryStatusTone }
+	StatusBadgeStyle
 > = {
 	failed: { label: "Failed", tone: "failed" },
 	pending: { label: "Pending", tone: "pending" },
@@ -71,55 +58,32 @@ export function RepositoriesTable({
 	resultsByRepository: Map<string, TransferRepositoryResult>;
 	selectedRepositories: Set<string>;
 }>) {
-	const visibleSelection = getVisibleSelection(
-		filteredRepositories.map((repository) => repository.name),
-		selectedRepositories
-	);
-
 	return (
-		<Table fixed>
-			<TableHead>
-				<TableRow>
-					<SelectableRowHeader
-						disabled={isTransferring || filteredRepositories.length === 0}
-						onToggleAll={onToggleAll}
-						selection={visibleSelection}
-					/>
-					{TRANSFER_TABLE_COLUMNS.map((column) => (
-						<TableHeader className={column.className} key={column.label}>
-							{column.label}
-						</TableHeader>
-					))}
-					<TableHeader className={ACTIONS_COLUMN_CLASS_NAME}>
-						<span className="sr-only">Actions</span>
-					</TableHeader>
-				</TableRow>
-			</TableHead>
-			<TableBody>
-				{filteredRepositories.map((repository) => (
-					<TransferRepositoryRow
-						isSelected={selectedRepositories.has(repository.name)}
-						isTransferring={isTransferring}
-						key={repository.id}
-						onToggle={onToggle}
-						repository={repository}
-						status={getRepositoryStatus(
-							repository.name,
-							pendingRepositories,
-							resultsByRepository
-						)}
-					/>
-				))}
-
-				<SkeletonRows
-					columns={TRANSFER_TABLE_COLUMNS}
-					count={placeholderRowCount}
+		<SelectableRepositoriesTable
+			columns={TRANSFER_TABLE_COLUMNS}
+			disabled={isTransferring}
+			onToggleAll={onToggleAll}
+			placeholderRowCount={placeholderRowCount}
+			repositoryNames={filteredRepositories.map(
+				(repository) => repository.name
+			)}
+			selectedRepositories={selectedRepositories}
+		>
+			{filteredRepositories.map((repository) => (
+				<TransferRepositoryRow
+					isSelected={selectedRepositories.has(repository.name)}
+					isTransferring={isTransferring}
+					key={repository.id}
+					onToggle={onToggle}
+					repository={repository}
+					status={getRepositoryStatus(
+						repository.name,
+						pendingRepositories,
+						resultsByRepository
+					)}
 				/>
-				{filteredRepositories.length === 0 && placeholderRowCount === 0 ? (
-					<EmptyTableRow colSpan={TABLE_COLUMN_COUNT} />
-				) : null}
-			</TableBody>
-		</Table>
+			))}
+		</SelectableRepositoriesTable>
 	);
 }
 
@@ -163,7 +127,7 @@ const TransferRepositoryRow = memo(function TransferRepositoryRowComponent({
 				<Text>{formatRepositoryPushedAt(repository.pushedAt)}</Text>
 			</TableCell>
 			<TableCell>
-				<RepositoryStatusBadge status={status} />
+				<RepositoryStatusBadge badges={STATUS_BADGES} status={status} />
 			</TableCell>
 			<TableCell onClick={stopEventPropagation}>
 				<RepositoryActionsMenu
@@ -191,18 +155,4 @@ function RepositoryTypeCell({
 			{repository.archived ? <RepositoryBadge>Archived</RepositoryBadge> : null}
 		</div>
 	);
-}
-
-function RepositoryStatusBadge({
-	status,
-}: Readonly<{
-	status: RepositoryStatus;
-}>) {
-	if (status === "idle") {
-		return <Text>Not queued</Text>;
-	}
-
-	const { label, tone } = STATUS_BADGES[status];
-
-	return <RepositoryBadge tone={tone}>{label}</RepositoryBadge>;
 }

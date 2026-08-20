@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { getFailedRepositoryNames } from "@/components/repositories/list-utils";
 import {
 	type RepositoryListState,
 	useRepositoryList,
@@ -31,13 +32,6 @@ const chunk = <Item>(items: Item[], size: number): Item[][] => {
 
 	return chunks;
 };
-
-const getFailedRepositoryNames = (
-	results: ManageRepositoryResult[] | null
-): string[] =>
-	(results ?? [])
-		.filter((result) => !result.ok)
-		.map((result) => result.repository);
 
 export interface ManageFlow {
 	actions: ManageRepositoryActions;

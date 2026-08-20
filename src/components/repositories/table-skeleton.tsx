@@ -3,25 +3,17 @@ import {
 	Table,
 	TableBody,
 	TableCell,
-	TableHead,
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
 import { SELECT_COLUMN_CLASS_NAME } from "./selectable-row";
+import { RepositoryTableHead, type TableColumn } from "./table-head";
 
 const SKELETON_ROW_COUNT = 8;
 /** Real rows are sized by their 36px dropdown/menu buttons; match that so rows don't jump when data lands. */
 const SKELETON_CELL_CLASS_NAME = "flex h-9 items-center";
 const SKELETON_BAR_CLASS_NAME =
 	"animate-pulse rounded bg-zinc-950/10 dark:bg-white/10";
-
-export interface TableColumn {
-	/** Width utility applied to the header cell; omit for the flexible column. */
-	className?: string;
-	label: string;
-}
-
-export const ACTIONS_COLUMN_CLASS_NAME = "w-14";
 
 /** Placeholder rows for repositories that haven't arrived yet. */
 export function SkeletonRows({
@@ -71,22 +63,12 @@ export function RepositoriesTableSkeleton({
 		<output aria-busy="true" aria-live="polite" className="block">
 			<span className="sr-only">Loading repositories…</span>
 			<Table fixed>
-				<TableHead>
-					<TableRow>
-						<TableHeader className={SELECT_COLUMN_CLASS_NAME}>
-							<span className="sr-only">Select</span>
-							<span className={clsx("block size-4", SKELETON_BAR_CLASS_NAME)} />
-						</TableHeader>
-						{columns.map((column) => (
-							<TableHeader className={column.className} key={column.label}>
-								{column.label}
-							</TableHeader>
-						))}
-						<TableHeader className={ACTIONS_COLUMN_CLASS_NAME}>
-							<span className="sr-only">Actions</span>
-						</TableHeader>
-					</TableRow>
-				</TableHead>
+				<RepositoryTableHead columns={columns}>
+					<TableHeader className={SELECT_COLUMN_CLASS_NAME}>
+						<span className="sr-only">Select</span>
+						<span className={clsx("block size-4", SKELETON_BAR_CLASS_NAME)} />
+					</TableHeader>
+				</RepositoryTableHead>
 				<TableBody>
 					<SkeletonRows
 						columns={columns}

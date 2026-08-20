@@ -8,8 +8,10 @@ import {
 import {
 	clampRepositoryPage,
 	getRepositoryPageCount,
+	getRepositoryRange,
 	getSelectedRepositoryNames,
 	sortRepositories,
+	toggleRepositoryNames,
 } from "./list-utils";
 
 export interface RepositoryListOptions {
@@ -145,35 +147,19 @@ export function useRepositoryList(
 			rangeAnchorRef.current = repositoryName;
 			setSelectedRepositoriesState((previousRepositories) => {
 				const nextRepositories = new Set(previousRepositories);
-				// An absent anchor can't match a name, so indexOf yields -1.
-				const anchorIndex = visibleRepositoryNames.indexOf(rangeAnchor ?? "");
-				const repositoryIndex = visibleRepositoryNames.indexOf(repositoryName);
+				const rangeNames = shouldSelectRange
+					? getRepositoryRange(
+							visibleRepositoryNames,
+							rangeAnchor,
+							repositoryName
+						)
+					: [];
 
-				if (shouldSelectRange && anchorIndex >= 0 && repositoryIndex >= 0) {
-					const rangeStart = Math.min(anchorIndex, repositoryIndex);
-					const rangeEnd = Math.max(anchorIndex, repositoryIndex);
-					const shouldSelectRepositories =
-						!nextRepositories.has(repositoryName);
-
-					for (const visibleRepositoryName of visibleRepositoryNames.slice(
-						rangeStart,
-						rangeEnd + 1
-					)) {
-						if (shouldSelectRepositories) {
-							nextRepositories.add(visibleRepositoryName);
-						} else {
-							nextRepositories.delete(visibleRepositoryName);
-						}
-					}
-
-					return getSelectedRepositoryNames(nextRepositories, repositories);
-				}
-
-				if (nextRepositories.has(repositoryName)) {
-					nextRepositories.delete(repositoryName);
-				} else {
-					nextRepositories.add(repositoryName);
-				}
+				toggleRepositoryNames(
+					nextRepositories,
+					rangeNames.length > 0 ? rangeNames : [repositoryName],
+					repositoryName
+				);
 
 				return getSelectedRepositoryNames(nextRepositories, repositories);
 			});
