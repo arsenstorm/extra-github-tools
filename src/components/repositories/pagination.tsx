@@ -111,7 +111,12 @@ function PageControls({
 	pageCount: number;
 }>) {
 	return (
-		<div className={clsx("flex items-center gap-4", className)}>
+		<div
+			className={clsx(
+				"flex flex-wrap items-center justify-center gap-4",
+				className
+			)}
+		>
 			<Button
 				disabled={currentPage <= 1}
 				onClick={() => onChangePage(currentPage - 1)}

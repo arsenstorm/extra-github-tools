@@ -30,13 +30,13 @@ export function RepositoryListToolbar({
 	return (
 		<div
 			className={clsx(
-				"flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between",
+				"flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between",
 				className
 			)}
 			ref={ref}
 		>
 			<div className="min-w-0 flex-1">{children}</div>
-			<div className="grid gap-3 sm:min-w-lg sm:grid-cols-[minmax(0,1fr)_12rem]">
+			<div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem] lg:min-w-md xl:min-w-lg">
 				<InputGroup>
 					<MagnifyingGlassIcon />
 					<Input
