@@ -53,7 +53,7 @@ export async function getGitHubAccessTokenFromHeaders(
 	try {
 		const result = await auth.api.getAccessToken({
 			body: {
-				providerId: "github",
+				useAccountCookie: true,
 			},
 			headers,
 		});
