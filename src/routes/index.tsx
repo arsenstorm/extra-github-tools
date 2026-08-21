@@ -17,12 +17,12 @@ function HomePage() {
 			<main className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 				{TOOL_LIST.filter((tool) => tool.enabled).map((tool) => (
 					<div
-						className="flex flex-col rounded-lg bg-zinc-200 p-4 ring-2 ring-zinc-300 dark:bg-zinc-800 dark:ring-zinc-700"
+						className="flex flex-col rounded-lg bg-zinc-200 p-4 ring ring-zinc-300 dark:bg-zinc-800 dark:ring-zinc-700"
 						key={tool.href}
 					>
 						<Subheading level={3}>{tool.title}</Subheading>
-						<Text>{tool.description}</Text>
-						<Button className="mt-4" color={tool.color} href={tool.href}>
+						<Text className="mb-4">{tool.description}</Text>
+						<Button className="mt-auto" color={tool.color} href={tool.href}>
 							{tool.title}
 						</Button>
 					</div>

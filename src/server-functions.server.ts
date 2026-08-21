@@ -4,7 +4,6 @@ import {
 	getGitHubOrganizationSupportsInternal,
 	isViewerAccount,
 	listGitHubAccounts,
-	listGitHubRepositories,
 	listGitHubRepositoriesPage,
 } from "./github/accounts";
 import { analyzeGitHubRepository } from "./github/analysis";
@@ -158,8 +157,6 @@ export function resolveRepositoriesPage(
 
 const EMPTY_FAME_PAGE_DATA: FamePageData = {
 	error: null,
-	organizations: null,
-	repositories: null,
 	stats: null,
 	statsPending: false,
 };
@@ -168,18 +165,8 @@ const loadFamePageData = async (
 	accessToken: string,
 	search: FameSearchInput
 ): Promise<FamePageData> => {
-	if (!search.org) {
-		return {
-			...EMPTY_FAME_PAGE_DATA,
-			organizations: await listGitHubAccounts(accessToken),
-		};
-	}
-
-	if (!search.repo) {
-		return {
-			...EMPTY_FAME_PAGE_DATA,
-			repositories: await listGitHubRepositories(accessToken, search.org),
-		};
+	if (!(search.org && search.repo)) {
+		return EMPTY_FAME_PAGE_DATA;
 	}
 
 	return {

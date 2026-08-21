@@ -10,6 +10,7 @@ import {
 	type Sleep,
 	sleep,
 } from "./client";
+import { isBotLogin } from "./contributor-summary";
 import {
 	type AnalyzeGitHubRepositoryOptions,
 	type ContributorStats,
@@ -29,6 +30,7 @@ interface GitHubTreeResponse {
 	tree: Array<{
 		type?: string;
 	}>;
+	truncated?: boolean;
 }
 
 interface GitHubContributorWeek {
@@ -152,25 +154,44 @@ const summarizeWeeks = (
 	return { activeWeeks, additions, deletions };
 };
 
+const loadContributorProfile = async (
+	context: GitHubRequestContext,
+	login: string
+): Promise<Pick<ContributorStats, "email" | "name">> => {
+	const fallback = {
+		email: `${login}@users.noreply.github.com`,
+		name: login,
+	};
+
+	try {
+		const profile = await fetchGitHubJson<GitHubUserProfileResponse>(
+			context,
+			`/users/${login}`,
+			`Failed to load the GitHub profile for ${login}.`
+		);
+
+		return {
+			email: profile.email ?? fallback.email,
+			name: profile.name ?? fallback.name,
+		};
+	} catch {
+		// A missing or rate-limited profile must not sink the whole analysis.
+		return fallback;
+	}
+};
+
 const loadContributorRow = async (
 	context: GitHubRequestContext,
-	contributor: ContributorWithAuthor,
-	totalCommits: number
+	contributor: ContributorWithAuthor
 ): Promise<ContributorStats> => {
 	const { login } = contributor.author;
-	const profile = await fetchGitHubJson<GitHubUserProfileResponse>(
-		context,
-		`/users/${login}`,
-		`Failed to load the GitHub profile for ${login}.`
-	);
-	const commits = contributor.total || 0;
 
 	return {
 		...summarizeWeeks(contributor.weeks ?? []),
-		commits,
-		email: profile.email ?? `${login}@users.noreply.github.com`,
-		name: profile.name ?? login,
-		percentage: totalCommits > 0 ? (commits / totalCommits) * 100 : 0,
+		...(await loadContributorProfile(context, login)),
+		commits: contributor.total || 0,
+		isBot: isBotLogin(login),
+		login,
 	};
 };
 
@@ -181,11 +202,17 @@ const hasAuthor = (
 const sumBy = <Item>(items: Item[], getValue: (item: Item) => number): number =>
 	items.reduce((total, item) => total + getValue(item), 0);
 
-const countFiles = async (
+interface RepositoryTreeSummary {
+	defaultBranch: string;
+	totalFiles: number;
+	totalFilesTruncated: boolean;
+}
+
+const loadRepositoryTree = async (
 	context: GitHubRequestContext,
 	owner: string,
 	repositoryName: string
-): Promise<number> => {
+): Promise<RepositoryTreeSummary> => {
 	const pathname = repositoryPathname(owner, repositoryName);
 	const repository = await fetchGitHubJson<GitHubRepositoryInfoResponse>(
 		context,
@@ -198,7 +225,11 @@ const countFiles = async (
 		`Failed to load the file tree for ${owner}/${repositoryName}.`
 	);
 
-	return tree.tree.filter((item) => item.type === "blob").length;
+	return {
+		defaultBranch: repository.default_branch,
+		totalFiles: tree.tree.filter((item) => item.type === "blob").length,
+		totalFilesTruncated: tree.truncated === true,
+	};
 };
 
 export async function analyzeGitHubRepository(
@@ -224,29 +255,26 @@ export async function analyzeGitHubRepository(
 			sleep: options.sleep ?? sleep,
 		}
 	);
-	const totalCommits = sumBy(
-		contributors,
+	const unattributedCommits = sumBy(
+		contributors.filter((contributor) => !hasAuthor(contributor)),
 		(contributor) => contributor.total || 0
 	);
-	const [contributorRows, totalFiles] = await Promise.all([
+	const [contributorRows, tree] = await Promise.all([
 		mapWithConcurrency(
 			contributors.filter(hasAuthor),
 			MAX_CONTRIBUTOR_PROFILE_CONCURRENCY,
-			(contributor) => loadContributorRow(context, contributor, totalCommits)
+			(contributor) => loadContributorRow(context, contributor)
 		),
-		countFiles(context, owner, repositoryName),
+		loadRepositoryTree(context, owner, repositoryName),
 	]);
-	const totalAdditions = sumBy(contributorRows, (row) => row.additions);
-	const totalDeletions = sumBy(contributorRows, (row) => row.deletions);
 
 	contributorRows.sort((left, right) => right.commits - left.commits);
 
 	return {
 		contributors: contributorRows,
-		totalAdditions,
-		totalCommits,
-		totalDeletions,
-		totalFiles,
-		totalLines: Math.max(0, totalAdditions - totalDeletions),
+		defaultBranch: tree.defaultBranch,
+		totalFiles: tree.totalFiles,
+		totalFilesTruncated: tree.totalFilesTruncated,
+		unattributedCommits,
 	};
 }

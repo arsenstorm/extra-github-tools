@@ -129,22 +129,29 @@ export interface ManageGitHubRepositoriesOptions {
 }
 
 export interface ContributorStats {
+	/** Number of weeks with at least one commit. */
 	activeWeeks: number;
 	additions: number;
 	commits: number;
 	deletions: number;
 	email: string;
+	/** True when the GitHub login ends in `[bot]`. */
+	isBot: boolean;
+	login: string;
 	name: string;
-	percentage: number;
 }
 
 export interface RepoStats {
+	/** Every contributor GitHub returned (at most its top 100), bots included, sorted by commits descending. */
 	contributors: ContributorStats[];
-	totalAdditions: number;
-	totalCommits: number;
-	totalDeletions: number;
+	/** The branch the statistics cover. */
+	defaultBranch: string;
+	/** Blobs in the default-branch tree; partial when `totalFilesTruncated` is true. */
 	totalFiles: number;
-	totalLines: number;
+	/** True when GitHub truncated the recursive tree response. */
+	totalFilesTruncated: boolean;
+	/** Commits whose author GitHub could not resolve to an account. */
+	unattributedCommits: number;
 }
 
 export interface AnalyzeGitHubRepositoryOptions {

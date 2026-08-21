@@ -13,8 +13,8 @@ export function RepositoryTableHead({
 	children,
 	columns,
 }: Readonly<{
-	/** The leading select-column header cell. */
-	children: React.ReactNode;
+	/** The leading select-column header cell; omit for tables without selection. */
+	children?: React.ReactNode;
 	columns: TableColumn[];
 }>) {
 	return (

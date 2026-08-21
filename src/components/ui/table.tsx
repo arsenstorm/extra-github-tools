@@ -57,8 +57,10 @@ export function Table({
 					>
 						<table
 							className={clsx(
-								"min-w-full text-left text-sm/6",
-								fixed && "w-full table-fixed"
+								"text-left text-sm/6",
+								// A fixed layout sized to the viewport would crush the flexible
+								// column on phones; a floor lets the wrapper scroll instead.
+								fixed ? "w-full min-w-3xl table-fixed" : "min-w-full"
 							)}
 						>
 							{children}

@@ -14,6 +14,6 @@ export const CONFIG: {
 		enabled: true,
 	},
 	commitFame: {
-		enabled: false,
+		enabled: true,
 	},
 };

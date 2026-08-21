@@ -33,7 +33,7 @@ export function SelectableRepositoriesTable({
 	const columnCount = columns.length + 2;
 
 	return (
-		<Table fixed>
+		<Table className="-mr-6 md:mx-0" fixed>
 			<RepositoryTableHead columns={columns}>
 				<SelectableRowHeader
 					disabled={disabled || repositoryNames.length === 0}

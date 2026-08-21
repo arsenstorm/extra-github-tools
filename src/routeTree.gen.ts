@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as GithubRouteImport } from './routes/_github'
-import { Route as FameRouteImport } from './routes/fame'
+import { Route as GithubFameRouteImport } from './routes/_github/fame'
 import { Route as GithubManageRouteImport } from './routes/_github/manage'
 import { Route as GithubTransferRouteImport } from './routes/_github/transfer'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
@@ -25,10 +25,10 @@ const GithubRoute = GithubRouteImport.update({
   id: '/_github',
   getParentRoute: () => rootRouteImport,
 } as any)
-const FameRoute = FameRouteImport.update({
+const GithubFameRoute = GithubFameRouteImport.update({
   id: '/fame',
   path: '/fame',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => GithubRoute,
 } as any)
 const GithubManageRoute = GithubManageRouteImport.update({
   id: '/manage',
@@ -48,14 +48,14 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/fame': typeof FameRoute
+  '/fame': typeof GithubFameRoute
   '/manage': typeof GithubManageRoute
   '/transfer': typeof GithubTransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/fame': typeof FameRoute
+  '/fame': typeof GithubFameRoute
   '/manage': typeof GithubManageRoute
   '/transfer': typeof GithubTransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -64,7 +64,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_github': typeof GithubRouteWithChildren
-  '/fame': typeof FameRoute
+  '/_github/fame': typeof GithubFameRoute
   '/_github/manage': typeof GithubManageRoute
   '/_github/transfer': typeof GithubTransferRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
@@ -78,7 +78,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_github'
-    | '/fame'
+    | '/_github/fame'
     | '/_github/manage'
     | '/_github/transfer'
     | '/api/auth/$'
@@ -87,7 +87,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GithubRoute: typeof GithubRouteWithChildren
-  FameRoute: typeof FameRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -107,12 +106,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof GithubRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/fame': {
-      id: '/fame'
+    '/_github/fame': {
+      id: '/_github/fame'
       path: '/fame'
       fullPath: '/fame'
-      preLoaderRoute: typeof FameRouteImport
-      parentRoute: typeof rootRouteImport
+      preLoaderRoute: typeof GithubFameRouteImport
+      parentRoute: typeof GithubRoute
     }
     '/_github/manage': {
       id: '/_github/manage'
@@ -139,11 +138,13 @@ declare module '@tanstack/react-router' {
 }
 
 interface GithubRouteChildren {
+  GithubFameRoute: typeof GithubFameRoute
   GithubManageRoute: typeof GithubManageRoute
   GithubTransferRoute: typeof GithubTransferRoute
 }
 
 const GithubRouteChildren: GithubRouteChildren = {
+  GithubFameRoute: GithubFameRoute,
   GithubManageRoute: GithubManageRoute,
   GithubTransferRoute: GithubTransferRoute,
 }
@@ -154,7 +155,6 @@ const GithubRouteWithChildren =
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GithubRoute: GithubRouteWithChildren,
-  FameRoute: FameRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

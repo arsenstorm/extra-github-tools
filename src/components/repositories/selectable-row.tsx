@@ -57,7 +57,7 @@ function SelectionCheckbox({
 		<Checkbox
 			aria-label={ariaLabel}
 			checked={checked}
-			className="group block size-4 rounded border border-zinc-950/15 bg-white data-checked:border-zinc-500 data-indeterminate:border-zinc-500 data-checked:bg-zinc-500 data-indeterminate:bg-zinc-500 data-disabled:opacity-50 dark:border-white/15 dark:bg-white/10 dark:data-checked:border-zinc-400 dark:data-indeterminate:border-zinc-400 dark:data-checked:bg-zinc-400 dark:data-indeterminate:bg-zinc-400"
+			className="group block size-5 rounded border border-zinc-950/15 bg-white data-checked:border-zinc-500 data-indeterminate:border-zinc-500 data-checked:bg-zinc-500 data-indeterminate:bg-zinc-500 data-disabled:opacity-50 sm:size-4 dark:border-white/15 dark:bg-white/10 dark:data-checked:border-zinc-400 dark:data-indeterminate:border-zinc-400 dark:data-checked:bg-zinc-400 dark:data-indeterminate:bg-zinc-400"
 			disabled={disabled}
 			indeterminate={indeterminate}
 			onChange={onChange}
