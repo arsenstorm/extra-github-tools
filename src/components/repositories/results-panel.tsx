@@ -52,7 +52,7 @@ export function ResultsPanel({
 				</div>
 			</div>
 			<Divider className="my-4" />
-			<Table dense>
+			<Table className="-mr-6 md:mx-0" dense>
 				<TableHead>
 					<TableRow>
 						<TableHeader>Repository</TableHeader>

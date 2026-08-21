@@ -6,9 +6,13 @@ import {
 	listGitHubRepositoriesPage,
 } from "./accounts";
 import { analyzeGitHubRepository } from "./analysis";
+import { isBotLogin, summarizeContributors } from "./contributor-summary";
 import { manageGitHubRepositories } from "./manage";
 import { transferGitHubRepositories } from "./transfer";
-import { isGitHubContributorStatsPendingError } from "./types";
+import {
+	type ContributorStats,
+	isGitHubContributorStatsPendingError,
+} from "./types";
 
 const MANAGED_REPOSITORY_PATH_PATTERN = /\/repos\/owner\/([^/]+)$/;
 
@@ -443,15 +447,15 @@ describe("analyzeGitHubRepository", () => {
 					commits: 3,
 					deletions: 4,
 					email: "alice@users.noreply.github.com",
+					isBot: false,
+					login: "alice",
 					name: "Alice",
-					percentage: 100,
 				},
 			],
-			totalAdditions: 11,
-			totalCommits: 3,
-			totalDeletions: 4,
+			defaultBranch: "main",
 			totalFiles: 2,
-			totalLines: 7,
+			totalFilesTruncated: false,
+			unattributedCommits: 0,
 		});
 	});
 
@@ -614,6 +618,290 @@ describe("analyzeGitHubRepository", () => {
 
 		expect(maxInFlight).toBeLessThanOrEqual(5);
 		expect(stats.contributors).toHaveLength(12);
+	});
+
+	it("flags bots and counts unattributed commits", async () => {
+		const fetchImplementation = createFetchImplementation((url) => {
+			if (url.endsWith("/repos/source/repo")) {
+				return new Response(JSON.stringify(createRepositoryInfoResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/git/trees/main?recursive=1")) {
+				return new Response(JSON.stringify(createTreeResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/stats/contributors")) {
+				return new Response(
+					JSON.stringify([
+						{ author: { login: "alice" }, total: 3, weeks: [] },
+						{ author: { login: "dependabot[bot]" }, total: 2, weeks: [] },
+						{ author: null, total: 4, weeks: [] },
+					]),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			if (url.includes("/users/")) {
+				const [, login] = url.split("/users/");
+
+				return new Response(
+					JSON.stringify({ email: null, login, name: null }),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			return new Response("not found", {
+				status: 404,
+				statusText: "Not Found",
+			});
+		});
+
+		const stats = await analyzeGitHubRepository("token", "source", "repo", {
+			fetchImplementation,
+		});
+
+		expect(stats.contributors).toHaveLength(2);
+		expect(
+			stats.contributors.find((contributor) => contributor.login === "alice")
+		).toMatchObject({ isBot: false });
+		expect(
+			stats.contributors.find(
+				(contributor) => contributor.login === "dependabot[bot]"
+			)
+		).toMatchObject({ isBot: true });
+		expect(stats.unattributedCommits).toBe(4);
+	});
+
+	it("flags a truncated file tree", async () => {
+		const fetchImplementation = createFetchImplementation((url) => {
+			if (url.endsWith("/repos/source/repo")) {
+				return new Response(JSON.stringify(createRepositoryInfoResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/git/trees/main?recursive=1")) {
+				return new Response(
+					JSON.stringify({ tree: [{ type: "blob" }], truncated: true }),
+					{ status: 200, statusText: "OK" }
+				);
+			}
+
+			if (url.endsWith("/stats/contributors")) {
+				return new Response(JSON.stringify([]), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			return new Response("not found", {
+				status: 404,
+				statusText: "Not Found",
+			});
+		});
+
+		const stats = await analyzeGitHubRepository("token", "source", "repo", {
+			fetchImplementation,
+		});
+
+		expect(stats.totalFiles).toBe(1);
+		expect(stats.totalFilesTruncated).toBe(true);
+	});
+
+	it("keeps a contributor row when the profile lookup fails", async () => {
+		const fetchImplementation = createFetchImplementation((url) => {
+			if (url.endsWith("/repos/source/repo")) {
+				return new Response(JSON.stringify(createRepositoryInfoResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/git/trees/main?recursive=1")) {
+				return new Response(JSON.stringify(createTreeResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/stats/contributors")) {
+				return new Response(JSON.stringify(createContributorStatsResponse()), {
+					status: 200,
+					statusText: "OK",
+				});
+			}
+
+			if (url.endsWith("/users/alice")) {
+				return new Response("nope", {
+					status: 500,
+					statusText: "Server Error",
+				});
+			}
+
+			return new Response("not found", {
+				status: 404,
+				statusText: "Not Found",
+			});
+		});
+
+		const stats = await analyzeGitHubRepository("token", "source", "repo", {
+			fetchImplementation,
+		});
+
+		expect(stats.contributors).toEqual([
+			expect.objectContaining({
+				email: "alice@users.noreply.github.com",
+				name: "alice",
+			}),
+		]);
+	});
+});
+
+describe("summarizeContributors", () => {
+	const createContributor = (
+		overrides: Partial<ContributorStats> = {}
+	): ContributorStats => ({
+		activeWeeks: 1,
+		additions: 0,
+		commits: 1,
+		deletions: 0,
+		email: "x@users.noreply.github.com",
+		isBot: false,
+		login: "x",
+		name: "x",
+		...overrides,
+	});
+
+	it("classifies logins ending in [bot] as bots", () => {
+		expect(isBotLogin("dependabot[bot]")).toBe(true);
+		expect(isBotLogin("alice")).toBe(false);
+		expect(isBotLogin("bot")).toBe(false);
+	});
+
+	it("hides bots and excludes them from totals by default", () => {
+		const alice = createContributor({
+			additions: 60,
+			commits: 6,
+			deletions: 6,
+			login: "alice",
+		});
+		const bot = createContributor({
+			additions: 40,
+			commits: 4,
+			deletions: 4,
+			isBot: true,
+			login: "renovate[bot]",
+		});
+
+		const summary = summarizeContributors([alice, bot], {
+			showBots: false,
+			sortBy: "commits",
+		});
+
+		expect(summary.rows).toHaveLength(1);
+		expect(summary.hiddenBotCount).toBe(1);
+		expect(summary.totalCommits).toBe(6);
+		expect(summary.totalAdditions).toBe(60);
+		expect(summary.totalDeletions).toBe(6);
+		expect(summary.rows[0]?.percentage).toBe(100);
+	});
+
+	it("includes bots when shown", () => {
+		const alice = createContributor({
+			additions: 60,
+			commits: 6,
+			deletions: 6,
+			login: "alice",
+		});
+		const bot = createContributor({
+			additions: 40,
+			commits: 4,
+			deletions: 4,
+			isBot: true,
+			login: "renovate[bot]",
+		});
+
+		const summary = summarizeContributors([alice, bot], {
+			showBots: true,
+			sortBy: "commits",
+		});
+
+		expect(summary.rows).toHaveLength(2);
+		expect(summary.hiddenBotCount).toBe(0);
+		expect(summary.totalCommits).toBe(10);
+		expect(summary.rows.find((row) => row.login === "alice")?.percentage).toBe(
+			60
+		);
+		expect(
+			summary.rows.find((row) => row.login === "renovate[bot]")?.percentage
+		).toBe(40);
+	});
+
+	it("percentages sum to 100 across visible rows", () => {
+		const contributors = [
+			createContributor({ commits: 1, login: "alice" }),
+			createContributor({ commits: 1, login: "bob" }),
+			createContributor({ commits: 1, login: "carol" }),
+		];
+
+		const summary = summarizeContributors(contributors, {
+			showBots: true,
+			sortBy: "commits",
+		});
+
+		const totalPercentage = summary.rows.reduce(
+			(total, row) => total + row.percentage,
+			0
+		);
+
+		expect(totalPercentage).toBeCloseTo(100, 5);
+	});
+
+	it("sorts by the requested key with commits as a tie-breaker", () => {
+		const alice = createContributor({
+			additions: 10,
+			commits: 5,
+			login: "alice",
+		});
+		const bob = createContributor({
+			additions: 50,
+			commits: 2,
+			login: "bob",
+		});
+		const carol = createContributor({
+			additions: 50,
+			commits: 2,
+			login: "carol",
+		});
+
+		const byAdditions = summarizeContributors([alice, bob, carol], {
+			showBots: true,
+			sortBy: "additions",
+		});
+
+		expect(byAdditions.rows.map((row) => row.login)).toEqual([
+			"bob",
+			"carol",
+			"alice",
+		]);
+
+		const byCommits = summarizeContributors([alice, bob, carol], {
+			showBots: true,
+			sortBy: "commits",
+		});
+
+		expect(byCommits.rows.map((row) => row.login)).toEqual([
+			"alice",
+			"bob",
+			"carol",
+		]);
 	});
 });
 

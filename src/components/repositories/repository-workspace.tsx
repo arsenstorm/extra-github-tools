@@ -13,6 +13,7 @@ export function RepositoryWorkspace<Data>({
 	isLoading,
 	promise,
 	resetKey,
+	selectable = true,
 	startMessage,
 	toolbar,
 }: Readonly<{
@@ -24,6 +25,8 @@ export function RepositoryWorkspace<Data>({
 	promise: Promise<Data> | null;
 	/** Changes when a different list is requested, so the skeleton shows again. */
 	resetKey: string;
+	/** Whether the table has a select column; the skeleton matches. */
+	selectable?: boolean;
 	startMessage: string;
 	/** The toolbar to show while the list is not interactive. */
 	toolbar: React.ReactNode;
@@ -31,7 +34,7 @@ export function RepositoryWorkspace<Data>({
 	const loadingState = (
 		<>
 			{toolbar}
-			<RepositoriesTableSkeleton columns={columns} />
+			<RepositoriesTableSkeleton columns={columns} selectable={selectable} />
 		</>
 	);
 

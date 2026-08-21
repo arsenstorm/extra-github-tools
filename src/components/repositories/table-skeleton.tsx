@@ -20,10 +20,13 @@ export function SkeletonRows({
 	columns,
 	count,
 	keyPrefix = "placeholder",
+	selectable = true,
 }: Readonly<{
 	columns: TableColumn[];
 	count: number;
 	keyPrefix?: string;
+	/** Render the leading select-column cell. */
+	selectable?: boolean;
 }>) {
 	const rowKeys = Array.from(
 		{ length: count },
@@ -32,11 +35,13 @@ export function SkeletonRows({
 
 	return rowKeys.map((rowKey) => (
 		<TableRow key={rowKey}>
-			<TableCell className="pr-2! pl-4!">
-				<span className={SKELETON_CELL_CLASS_NAME}>
-					<span className={clsx("size-4", SKELETON_BAR_CLASS_NAME)} />
-				</span>
-			</TableCell>
+			{selectable ? (
+				<TableCell className="pr-2! pl-4!">
+					<span className={SKELETON_CELL_CLASS_NAME}>
+						<span className={clsx("size-4", SKELETON_BAR_CLASS_NAME)} />
+					</span>
+				</TableCell>
+			) : null}
 			{columns.map((column) => (
 				<TableCell key={column.label}>
 					<span className={SKELETON_CELL_CLASS_NAME}>
@@ -56,24 +61,30 @@ export function SkeletonRows({
 /** Placeholder rows shown while a repository list loads, matching the real table's columns. */
 export function RepositoriesTableSkeleton({
 	columns,
+	selectable = true,
 }: Readonly<{
 	columns: TableColumn[];
+	/** Render the leading select column. */
+	selectable?: boolean;
 }>) {
 	return (
 		<output aria-busy="true" aria-live="polite" className="block">
 			<span className="sr-only">Loading repositories…</span>
-			<Table fixed>
+			<Table className="-mr-6 md:mx-0" fixed>
 				<RepositoryTableHead columns={columns}>
-					<TableHeader className={SELECT_COLUMN_CLASS_NAME}>
-						<span className="sr-only">Select</span>
-						<span className={clsx("block size-4", SKELETON_BAR_CLASS_NAME)} />
-					</TableHeader>
+					{selectable ? (
+						<TableHeader className={SELECT_COLUMN_CLASS_NAME}>
+							<span className="sr-only">Select</span>
+							<span className={clsx("block size-4", SKELETON_BAR_CLASS_NAME)} />
+						</TableHeader>
+					) : null}
 				</RepositoryTableHead>
 				<TableBody>
 					<SkeletonRows
 						columns={columns}
 						count={SKELETON_ROW_COUNT}
 						keyPrefix="skeleton"
+						selectable={selectable}
 					/>
 				</TableBody>
 			</Table>

@@ -14,7 +14,7 @@ export const TOOLS = {
 	fame: {
 		color: "amber",
 		description:
-			"See how your commits compare to your colleagues and who's doing more.",
+			"See who contributes to a repository by commits, lines changed, and active weeks.",
 		enabled: CONFIG.commitFame.enabled,
 		href: "/fame",
 		title: "Commit Fame",

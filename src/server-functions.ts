@@ -77,8 +77,6 @@ export interface FameSearchInput {
 
 export interface FamePageData {
 	error: string | null;
-	organizations: GitHubAccount[] | null;
-	repositories: GitHubRepository[] | null;
 	stats: RepoStats | null;
 	statsPending: boolean;
 }

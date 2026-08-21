@@ -181,15 +181,17 @@ export function Navigation({
 				<Sidebar>
 					<SidebarBody>
 						<SidebarSection>
-							{navItems.map(({ label, to }) => (
-								<SidebarItem
-									current={isCurrentPath(pathname, to)}
-									key={label}
-									to={to}
-								>
-									{label}
-								</SidebarItem>
-							))}
+							{navItems
+								.filter((item) => item.enabled ?? true)
+								.map(({ label, to }) => (
+									<SidebarItem
+										current={isCurrentPath(pathname, to)}
+										key={label}
+										to={to}
+									>
+										{label}
+									</SidebarItem>
+								))}
 						</SidebarSection>
 					</SidebarBody>
 				</Sidebar>
