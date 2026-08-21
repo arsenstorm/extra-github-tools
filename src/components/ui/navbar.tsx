@@ -89,19 +89,19 @@ export const NavbarItem = function NavbarItem({
 		// Base
 		"relative flex min-w-0 items-center gap-3 rounded-lg p-2 text-left font-medium text-base/6 text-zinc-950 sm:text-sm/5",
 		// Leading icon/icon-only
-		"data-[slot=icon]:*:size-6 data-[slot=icon]:*:shrink-0 data-[slot=icon]:*:fill-zinc-500 sm:data-[slot=icon]:*:size-5",
+		"*:data-[slot=icon]:size-6 *:data-[slot=icon]:shrink-0 *:data-[slot=icon]:fill-zinc-500 sm:*:data-[slot=icon]:size-5",
 		// Trailing icon (down chevron or similar)
 		"data-[slot=icon]:last:not-nth-2:*:ml-auto data-[slot=icon]:last:not-nth-2:*:size-5 sm:data-[slot=icon]:last:not-nth-2:*:size-4",
 		// Avatar
 		"*:data-[slot=avatar]:-m-0.5 *:data-[slot=avatar]:size-7 sm:*:data-[slot=avatar]:size-6 *:data-[slot=avatar]:[--avatar-radius:var(--radius)] *:data-[slot=avatar]:[--ring-opacity:10%]",
 		// Hover
-		"data-hover:bg-zinc-950/5 data-[slot=icon]:*:data-hover:fill-zinc-950",
+		"data-hover:bg-zinc-950/5 data-hover:*:data-[slot=icon]:fill-zinc-950",
 		// Active
-		"data-active:bg-zinc-950/5 data-[slot=icon]:*:data-active:fill-zinc-950",
+		"data-active:bg-zinc-950/5 data-active:*:data-[slot=icon]:fill-zinc-950",
 		// Dark mode
-		"dark:text-white dark:data-[slot=icon]:*:fill-zinc-400",
-		"dark:data-hover:bg-white/5 dark:data-[slot=icon]:*:data-hover:fill-white",
-		"dark:data-active:bg-white/5 dark:data-[slot=icon]:*:data-active:fill-white"
+		"dark:text-white dark:*:data-[slot=icon]:fill-zinc-400",
+		"dark:data-hover:bg-white/5 dark:data-hover:*:data-[slot=icon]:fill-white",
+		"dark:data-active:bg-white/5 dark:data-active:*:data-[slot=icon]:fill-white"
 	);
 
 	return (
