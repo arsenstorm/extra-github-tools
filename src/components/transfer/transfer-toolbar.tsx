@@ -49,7 +49,7 @@ export function TransferToolbar({
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center">
 				<AccountListbox
 					accounts={accounts}
-					className="sm:w-60"
+					className="sm:w-48 xl:w-60"
 					disabled={false}
 					label="Repositories to transfer from"
 					onPreload={onPreloadSource}
@@ -63,7 +63,7 @@ export function TransferToolbar({
 				/>
 				<AccountListbox
 					accounts={destinationAccounts}
-					className="sm:w-60"
+					className="sm:w-48 xl:w-60"
 					disabled={false}
 					label="Repositories to transfer to"
 					onSelect={onSelectTo}
